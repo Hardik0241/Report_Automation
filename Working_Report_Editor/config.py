@@ -3,10 +3,9 @@ config.py — Central configuration for Report Automation System.
 All secrets loaded from .env. Never hardcode credentials here.
 """
 
-import os
-from dotenv import load_dotenv
+import streamlit as st
 
-load_dotenv()
+API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # ─────────────────────────────────────────────
 # EMPLOYEE LISTS — Fixed order, never auto-sorted
@@ -78,8 +77,8 @@ from google.oauth2 import service_account
 creds_dict = json.loads(st.secrets["GOOGLE_CREDENTIALS"])
 creds = service_account.Credentials.from_service_account_info(creds_dict)
 
-SALES_SPREADSHEET_ID = os.getenv("SALES_SPREADSHEET_ID", "YOUR_SALES_SPREADSHEET_ID")
-HR_SPREADSHEET_ID    = os.getenv("HR_SPREADSHEET_ID",    "YOUR_HR_SPREADSHEET_ID")
+SALES_SPREADSHEET_ID = st.secrets("SALES_SPREADSHEET_ID", "YOUR_SALES_SPREADSHEET_ID")
+HR_SPREADSHEET_ID    = st.secrets("HR_SPREADSHEET_ID",    "YOUR_HR_SPREADSHEET_ID")
 
 # Sheet name format derived from date: "25-03-2026" → "Apr-2026"
 DATE_IN_SUBJECT_FORMAT = "%d-%m-%Y"
@@ -124,7 +123,7 @@ GMAIL_USER_ID = "me"
 # ─────────────────────────────────────────────
 # GEMINI CONFIGURATION
 # ─────────────────────────────────────────────
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = st.secretsv("GEMINI_API_KEY", "")
 GEMINI_MODEL   = "gemini-2.5-flash"
 
 # ─────────────────────────────────────────────
