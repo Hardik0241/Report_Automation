@@ -33,6 +33,27 @@ logger = logging.getLogger(__name__)
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
 ATTACHMENTS_DIR  = "attachments"
 
+GMAIL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly"
+]
+
+import streamlit as st
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+
+def _get_service(self):
+    creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
+
+    creds = service_account.Credentials.from_service_account_info(
+        creds_dict,
+        scopes=["https://www.googleapis.com/auth/gmail.readonly"]
+    )
+
+    service = build("gmail", "v1", credentials=creds)
+    return service
+
+self.gmail = GmailReader()
+emails = self.gmail.fetch_emails()
 
 class GmailReader:
     def __init__(self):
