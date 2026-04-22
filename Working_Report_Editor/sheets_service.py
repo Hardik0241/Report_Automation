@@ -15,6 +15,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import gspread
+client = gspread.authorize(creds)
+
 from google.oauth2.service_account import Credentials
 
 from config import (
@@ -38,14 +40,27 @@ _SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
 ]
 
+from google.oauth2 import service_account
+import streamlit as st
 
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
+
+creds = service_account.Credentials.from_service_account_info(
+    creds_dict,
+    scopes=SCOPES
+)
 class SheetsService:
+    
 
     def __init__(self):
         import streamlit as st
         from google.oauth2 import service_account
         creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
-        creds = service_account.Credentials.from_service_account_info(creds_dict)
         client = gspread.authorize(creds)
         self._sales_ss = client.open_by_key(SALES_SPREADSHEET_ID)
         self._hr_ss    = client.open_by_key(HR_SPREADSHEET_ID)
