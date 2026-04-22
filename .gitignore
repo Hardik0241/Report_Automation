@@ -201,6 +201,26 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# 🔐 Project-specific sensitive files
+credentials.json
+client_secret.json
+token.pickle
+
+# Environment files
+.env
+env/
+.venv/
+
+# IDE settings
+.vscode/
+
+# Logs and runtime data
+logs/
+attachments/
+
+# Optional: if config contains secrets
+# config.py
+# config.yaml
 # Marimo
 marimo/_static/
 marimo/_lsp/
