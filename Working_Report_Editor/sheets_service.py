@@ -27,7 +27,6 @@ from config import (
     SALES_EMPLOYEES,
     SALES_HEADERS,
     SALES_SPREADSHEET_ID,
-    SERVICE_ACCOUNT_FILE,
     SHEET_NAME_FORMAT,
 )
 from error_handler import SheetUpdateError, with_retry
@@ -43,7 +42,10 @@ _SCOPES = [
 class SheetsService:
 
     def __init__(self):
-        creds  = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=_SCOPES)
+        import streamlit as st
+        from google.oauth2 import service_account
+        creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
+        creds = service_account.Credentials.from_service_account_info(creds_dict)
         client = gspread.authorize(creds)
         self._sales_ss = client.open_by_key(SALES_SPREADSHEET_ID)
         self._hr_ss    = client.open_by_key(HR_SPREADSHEET_ID)
