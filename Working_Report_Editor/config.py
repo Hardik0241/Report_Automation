@@ -76,8 +76,8 @@ from google.oauth2 import service_account
 creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
 creds = service_account.Credentials.from_service_account_info(creds_dict)
 
-SALES_SPREADSHEET_ID = st.secrets("SALES_SPREADSHEET_ID", "YOUR_SALES_SPREADSHEET_ID")
-HR_SPREADSHEET_ID    = st.secrets("HR_SPREADSHEET_ID",    "YOUR_HR_SPREADSHEET_ID")
+SALES_SPREADSHEET_ID = st.secrets("SALES_SPREADSHEET_ID", "1_k5sSAGc_tx13bbdb8UF9H2-2g38aePGC9XwKvXnop4")
+HR_SPREADSHEET_ID    = st.secrets("HR_SPREADSHEET_ID",    "1vt69eUvV5c_Se5OPLcMh8ox1G2paQaAv8ysF5-k3Cng")
 
 # Sheet name format derived from date: "25-03-2026" → "Apr-2026"
 DATE_IN_SUBJECT_FORMAT = "%d-%m-%Y"
