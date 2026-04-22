@@ -71,18 +71,9 @@ ACTIVE_END_MINUTE   = 59
 # GOOGLE SHEETS CONFIGURATION
 # ─────────────────────────────────────────────
 import streamlit as st
-import json
 from google.oauth2 import service_account
 
-creds_raw = st.secrets["GOOGLE_CREDENTIALS"]
-
-# Convert to dict if needed
-if isinstance(creds_raw, str):
-    creds_dict = json.loads(creds_raw)
-else:
-    creds_dict = creds_raw
-
-creds = service_account.Credentials.from_service_account_info(creds_dict)
+creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
 creds = service_account.Credentials.from_service_account_info(creds_dict)
 
 SALES_SPREADSHEET_ID = st.secrets("SALES_SPREADSHEET_ID", "YOUR_SALES_SPREADSHEET_ID")
