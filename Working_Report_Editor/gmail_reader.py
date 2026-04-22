@@ -52,8 +52,8 @@ def _get_service(self):
     service = build("gmail", "v1", credentials=creds)
     return service
 
-self.gmail = GmailReader()
-emails = self.gmail.fetch_emails()
+#self.gmail = GmailReader()
+#emails = self.gmail.fetch_emails()
 
 class GmailReader:
     def __init__(self):
