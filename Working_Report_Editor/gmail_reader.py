@@ -1,28 +1,22 @@
 """
 gmail_reader.py — Fetch unread emails (body + image attachments) from Gmail.
-Uses OAuth2 with token.pickle for authentication.
-
-Each returned email dict now includes:
-  "received_at"  → datetime object of when the email was received
-  "received_ms"  → raw internalDate in milliseconds (for Sales date logic)
+Cloud-compatible version (no client_secret.json, no token.pickle)
 """
 
 import base64
 import hashlib
 import logging
 import os
-import pickle
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import streamlit as st
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
 
 from config import (
     GMAIL_QUERY,
-    GMAIL_SCOPES,
     GMAIL_USER_ID,
     MAX_EMAILS_PER_RUN,
 )
@@ -31,29 +25,10 @@ from error_handler import AttachmentError, EmailFetchError, with_retry
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
-ATTACHMENTS_DIR  = "attachments"
+ATTACHMENTS_DIR = "attachments"
 
-GMAIL_SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly"
-]
+SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
-import streamlit as st
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-
-def _get_service(self):
-    creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
-
-    creds = service_account.Credentials.from_service_account_info(
-        creds_dict,
-        scopes=["https://www.googleapis.com/auth/gmail.readonly"]
-    )
-
-    service = build("gmail", "v1", credentials=creds)
-    return service
-
-#self.gmail = GmailReader()
-#emails = self.gmail.fetch_emails()
 
 class GmailReader:
     def __init__(self):
@@ -61,42 +36,31 @@ class GmailReader:
         self._service = None
 
     # ──────────────────────────────────────────
-    # Auth
+    # Auth (FIXED FOR STREAMLIT CLOUD)
     # ──────────────────────────────────────────
 
     def _get_service(self):
         if self._service:
             return self._service
+
         try:
-            creds = None
-            if os.path.exists("token.pickle"):
-                with open("token.pickle", "rb") as f:
-                    creds = pickle.load(f)
+            creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
 
-            if not creds or not creds.valid:
-                if creds and creds.expired and creds.refresh_token:
-                    creds.refresh(Request())
-                else:
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        "client_secret.json", GMAIL_SCOPES
-                    )
-                    try:
-                        creds = flow.run_local_server(port=0)
-                    except Exception as exc:
-                        logger.warning(f"Local server auth failed ({exc}); using console.")
-                        creds = flow.run_console()
-
-                with open("token.pickle", "wb") as f:
-                    pickle.dump(creds, f)
+            creds = service_account.Credentials.from_service_account_info(
+                creds_dict,
+                scopes=SCOPES
+            )
 
             self._service = build("gmail", "v1", credentials=creds)
-            logger.info("Gmail service initialised.")
+            logger.info("Gmail service initialised (service account).")
+
         except Exception as exc:
             raise EmailFetchError(
                 f"Cannot create Gmail service: {exc}",
                 "auth_error",
                 {"error": str(exc)},
             ) from exc
+
         return self._service
 
     # ──────────────────────────────────────────
@@ -105,13 +69,8 @@ class GmailReader:
 
     @with_retry()
     def fetch_emails(self) -> List[Dict]:
-        """
-        Fetch unread emails.
-        Returns list of dicts with keys:
-          id, subject, from, body, attachments, hash,
-          received_at (datetime), received_ms (int)
-        """
         svc = self._get_service()
+
         try:
             result = svc.users().messages().list(
                 userId=GMAIL_USER_ID,
@@ -133,6 +92,7 @@ class GmailReader:
             email_obj = self._process_message(svc, msg_stub["id"])
             if email_obj:
                 emails.append(email_obj)
+
         return emails
 
     # ──────────────────────────────────────────
@@ -148,50 +108,44 @@ class GmailReader:
             logger.error(f"Could not fetch message {msg_id}: {exc}")
             return None
 
-        # ── Headers ──
-        subject    = ""
+        subject = ""
         from_email = ""
+
         for h in msg["payload"].get("headers", []):
-            name_lower = h["name"].lower()
-            if name_lower == "subject":
+            if h["name"].lower() == "subject":
                 subject = h["value"]
-            elif name_lower == "from":
+            elif h["name"].lower() == "from":
                 from_email = h["value"]
 
-        # ── Received timestamp ──
-        # internalDate is milliseconds since Unix epoch
         received_ms = int(msg.get("internalDate", 0))
-        received_at = datetime.fromtimestamp(received_ms / 1000) if received_ms else datetime.now()
+        received_at = (
+            datetime.fromtimestamp(received_ms / 1000)
+            if received_ms else datetime.now()
+        )
 
-        # ── Body + attachments ──
-        body_parts: List[str] = []
-        att_paths:  List[str] = []
-        self._walk_parts(svc, msg_id, msg["payload"], body_ref=body_parts, att_ref=att_paths)
+        body_parts = []
+        att_paths = []
+
+        self._walk_parts(
+            svc, msg_id, msg["payload"],
+            body_ref=body_parts,
+            att_ref=att_paths
+        )
+
         body = "\n".join(body_parts)
 
-        # ── Mark as read ──
-        try:
-            svc.users().messages().modify(
-                userId=GMAIL_USER_ID,
-                id=msg_id,
-                body={"removeLabelIds": ["UNREAD"]},
-            ).execute()
-        except Exception as exc:
-            logger.warning(f"Could not mark {msg_id} as read: {exc}")
-
         return {
-            "id":          msg_id,
-            "subject":     subject,
-            "from":        from_email,
-            "body":        body,
+            "id": msg_id,
+            "subject": subject,
+            "from": from_email,
+            "body": body,
             "attachments": att_paths,
-            "hash":        self._email_hash(msg_id, subject),
+            "hash": self._email_hash(msg_id, subject),
             "received_at": received_at,
             "received_ms": received_ms,
         }
 
-    def _walk_parts(self, svc, msg_id: str, part: Dict,
-                    body_ref: List[str], att_ref: List[str]):
+    def _walk_parts(self, svc, msg_id, part, body_ref, att_ref):
         mime = part.get("mimeType", "")
 
         if mime == "text/plain":
@@ -210,23 +164,28 @@ class GmailReader:
         for sub in part.get("parts", []):
             self._walk_parts(svc, msg_id, sub, body_ref, att_ref)
 
-    def _download_attachment(self, svc, msg_id: str, part: Dict) -> Optional[str]:
-        filename = part["filename"]
-        att_id   = part["body"]["attachmentId"]
+    def _download_attachment(self, svc, msg_id, part):
         try:
-            att       = svc.users().messages().attachments().get(
-                userId=GMAIL_USER_ID, messageId=msg_id, id=att_id
+            att = svc.users().messages().attachments().get(
+                userId=GMAIL_USER_ID,
+                messageId=msg_id,
+                id=part["body"]["attachmentId"]
             ).execute()
-            raw       = base64.urlsafe_b64decode(att["data"])
+
+            raw = base64.urlsafe_b64decode(att["data"])
+            filename = part["filename"]
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             safe_name = f"{timestamp}_{filename}"
-            path      = os.path.join(ATTACHMENTS_DIR, safe_name)
+            path = os.path.join(ATTACHMENTS_DIR, safe_name)
+
             with open(path, "wb") as fh:
                 fh.write(raw)
-            logger.info(f"Attachment saved: {safe_name}")
+
             return path
+
         except Exception as exc:
-            logger.error(f"Attachment download failed for {filename}: {exc}")
+            logger.error(f"Attachment download failed: {exc}")
             return None
 
     @staticmethod
