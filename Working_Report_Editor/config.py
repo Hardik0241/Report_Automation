@@ -71,7 +71,12 @@ ACTIVE_END_MINUTE   = 59
 # ─────────────────────────────────────────────
 # GOOGLE SHEETS CONFIGURATION
 # ─────────────────────────────────────────────
-SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE", "credentials.json")
+import streamlit as st
+import json
+from google.oauth2 import service_account
+
+creds_dict = json.loads(st.secrets["GOOGLE_CREDENTIALS"])
+creds = service_account.Credentials.from_service_account_info(creds_dict)
 
 SALES_SPREADSHEET_ID = os.getenv("SALES_SPREADSHEET_ID", "YOUR_SALES_SPREADSHEET_ID")
 HR_SPREADSHEET_ID    = os.getenv("HR_SPREADSHEET_ID",    "YOUR_HR_SPREADSHEET_ID")
