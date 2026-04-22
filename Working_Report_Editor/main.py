@@ -1,0 +1,296 @@
+"""
+main.py — Production pipeline orchestrator.
+
+Key changes:
+  1. Sales dept uses email RECEIVED DATE (not subject date)
+  2. Name resolved from sender email map if body has no name
+  3. Sales emails received at/after midnight (00:00) are REJECTED
+  4. HR has no deadline — all rules unchanged
+"""
+
+import logging
+import time
+from datetime import datetime
+from typing import Dict, List, Optional
+
+from config import (
+    HR_EMAIL_MAP, HR_EMPLOYEES,
+    SALES_CUTOFF_HOUR, SALES_CUTOFF_MINUTE,
+    SALES_EMAIL_MAP, SALES_EMPLOYEES,
+)
+from error_handler import BaseProcessingError, log_error
+from gmail_reader import GmailReader
+from gemini_parser import GeminiParser
+from sheets_service import SheetsService
+from tracker import Tracker
+from utils import (
+    extract_date_from_subject,
+    extract_email_address,
+    received_timestamp_to_date,
+    received_timestamp_to_datetime,
+)
+from validator import DataValidator
+from vision_parser import VisionParser
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+
+class ReportProcessor:
+
+    def __init__(self):
+        logger.info("Initialising ReportProcessor …")
+        self.gmail     = GmailReader()
+        self.parser    = GeminiParser()
+        self.vision    = VisionParser()
+        self.sheets    = SheetsService()
+        self.tracker   = Tracker()
+        self.validator = DataValidator()
+
+    # ─────────────────────────────────────────
+    # Per-email pipeline
+    # ─────────────────────────────────────────
+
+    def process_email(self, email: Dict) -> Dict:
+        t0          = time.time()
+        email_id    = email.get("id", "")
+        subject     = email.get("subject", "")
+        body        = email.get("body", "")
+        attachments = email.get("attachments", [])
+        email_hash  = email.get("hash", "")
+        from_header = email.get("from", "")
+        received_at: datetime = email.get("received_at", datetime.now())
+        received_ms: int      = email.get("received_ms", 0)
+        preview     = (subject or body)[:120]
+
+        def _fail(reason: str, dept="", emp="", date="") -> Dict:
+            self.tracker.log_status(
+                preview, "FAILED", email_id, dept, emp, date,
+                reason=reason, processing_time=time.time() - t0
+            )
+            logger.warning(f"FAILED [{email_id}]: {reason}")
+            return {"status": "FAILED", "reason": reason}
+
+        # ── 1. Duplicate check ────────────────
+        if self.tracker.is_duplicate(email_hash):
+            self.tracker.log_status(
+                preview, "DUPLICATE", email_id,
+                reason="Already processed within window",
+                processing_time=time.time() - t0,
+            )
+            logger.info(f"DUPLICATE skipped: {subject!r}")
+            return {"status": "DUPLICATE"}
+
+        try:
+            # ── 2. Parse email body ───────────
+            email_data = self.parser.parse_email(body)
+            if not email_data:
+                return _fail("Email body parsing failed completely")
+
+            dept = email_data.get("department", "Unknown")
+
+            # ── 3. Resolve department from sender if still Unknown ───────
+            sender_email = extract_email_address(from_header)
+            if dept == "Unknown":
+                if sender_email in SALES_EMAIL_MAP:
+                    dept = "Sales"
+                elif sender_email in HR_EMAIL_MAP:
+                    dept = "HR"
+
+            if dept not in ("Sales", "HR"):
+                return _fail(
+                    f"Could not determine department — not in Sales/HR email maps "
+                    f"and body detection failed. Sender: {sender_email}"
+                )
+
+            email_data["department"] = dept
+            employees = SALES_EMPLOYEES if dept == "Sales" else HR_EMPLOYEES
+
+            # ── 4. Resolve employee name ──────────────────────────────────
+            # Priority: body name → sender email map → fail
+            body_name = email_data.get("employee_name", "").strip()
+
+            if body_name:
+                # Validate name found in body
+                ok, canonical_name, name_reason = self.validator.validate_employee_name(
+                    body_name, dept
+                )
+                if not ok:
+                    # Body name didn't match — try email map as fallback
+                    email_map = SALES_EMAIL_MAP if dept == "Sales" else HR_EMAIL_MAP
+                    canonical_name = email_map.get(sender_email, "")
+                    if not canonical_name:
+                        return _fail(
+                            f"Name '{body_name}' not matched & sender not in email map",
+                            dept=dept,
+                        )
+                    logger.info(f"Name from body failed; used email map: {canonical_name}")
+            else:
+                # No name in body — use sender email map
+                email_map = SALES_EMAIL_MAP if dept == "Sales" else HR_EMAIL_MAP
+                canonical_name = email_map.get(sender_email, "")
+                if not canonical_name:
+                    return _fail(
+                        f"No name in email body and sender '{sender_email}' "
+                        f"not found in email map",
+                        dept=dept,
+                    )
+                logger.info(f"No name in body; resolved from email map: {canonical_name}")
+
+            email_data["employee_name"] = canonical_name
+
+            # ── 5. Determine date ─────────────────────────────────────────
+            # Sales: always use the email received date
+            # HR:    try subject first, fall back to received date
+            if dept == "Sales":
+                date_str = received_timestamp_to_date(received_ms) if received_ms \
+                           else received_at.strftime("%d-%m-%Y")
+                logger.info(f"Sales email — using received date: {date_str}")
+
+            else:  # HR
+                date_str = extract_date_from_subject(subject)
+                if not date_str:
+                    date_str = received_at.strftime("%d-%m-%Y")
+                    logger.info(f"HR: no date in subject, using received date: {date_str}")
+
+            email_data["date"] = date_str
+
+            # ── 6. Sales midnight cutoff ──────────────────────────────────
+            # Only for Sales. Emails received at/after 00:00 are rejected.
+            if dept == "Sales":
+                cutoff_reached = (
+                    received_at.hour > SALES_CUTOFF_HOUR
+                    or (received_at.hour == SALES_CUTOFF_HOUR
+                        and received_at.minute >= SALES_CUTOFF_MINUTE)
+                ) and received_at.hour == 0   # Only reject if it's actually midnight hour
+
+                # Simpler: reject if hour is 0 (midnight) or beyond
+                # Active window is 2:30 PM – 11:59 PM
+                # Anything arriving at 00:00:00 or later = next-day = rejected
+                if received_at.hour == SALES_CUTOFF_HOUR and received_at.minute >= SALES_CUTOFF_MINUTE:
+                    return _fail(
+                        f"Sales report received after midnight cutoff "
+                        f"({received_at.strftime('%H:%M')}). "
+                        f"Deadline is 11:59 PM.",
+                        dept=dept, emp=canonical_name, date=date_str,
+                    )
+
+            # ── 7. Required fields ────────────
+            ok, field_err = self.validator.validate_required_fields(email_data, dept)
+            if not ok:
+                return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
+
+            # ── 8. Screenshot parsing ─────────
+            screenshot_data = None
+            image_exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
+            logger.info(f"Found {len(attachments)} attachment(s): {attachments}")
+
+            for att in attachments:
+                if any(att.lower().endswith(ext) for ext in image_exts):
+                    screenshot_data = self.vision.parse_screenshot(att)
+                    if screenshot_data:
+                        logger.info(f"Screenshot parsed: {screenshot_data}")
+                        break
+                    else:
+                        logger.warning(f"Failed to parse screenshot: {att}")
+
+            if not screenshot_data:
+                logger.warning("No screenshot data parsed from any attachment")
+
+            # ── 9. Data match validation ──────
+            ok, match_reason = self.validator.validate_data_match(
+                email_data, screenshot_data, dept
+            )
+            if not ok:
+                return _fail(match_reason, dept=dept, emp=canonical_name, date=date_str)
+
+            # ── 10. Sheet update ──────────────
+            self.sheets.ensure_date_for_all_employees(dept, date_str)
+
+            row_num = self.sheets.find_employee_row(dept, date_str, canonical_name)
+            if not row_num:
+                return _fail(
+                    f"Row not found for {canonical_name} on {date_str}",
+                    dept=dept, emp=canonical_name, date=date_str,
+                )
+
+            self.sheets.write_data(dept, date_str, row_num, email_data)
+
+            # ── 11. Mark processed + log ──────
+            self.tracker.mark_processed(email_hash)
+            elapsed = time.time() - t0
+            self.tracker.log_status(
+                preview, "SUCCESS", email_id, dept, canonical_name, date_str,
+                processing_time=elapsed,
+            )
+            logger.info(
+                f"SUCCESS — {dept} / {canonical_name} / {date_str} "
+                f"(row {row_num}) [{elapsed:.1f}s]"
+            )
+            return {
+                "status":     "SUCCESS",
+                "department": dept,
+                "employee":   canonical_name,
+                "date":       date_str,
+                "row":        row_num,
+            }
+
+        except BaseProcessingError as exc:
+            log_error(exc, {"email_id": email_id, "subject": subject})
+            return _fail(str(exc))
+
+        except Exception as exc:
+            log_error(exc, {"email_id": email_id, "subject": subject})
+            return _fail(f"Unexpected error: {exc}")
+
+    # ─────────────────────────────────────────
+    # Batch runner
+    # ─────────────────────────────────────────
+
+    def run(self) -> List[Dict]:
+        logger.info("═" * 60)
+        logger.info("Report Processor started")
+
+        emails = self.gmail.fetch_emails()
+        logger.info(f"Fetched {len(emails)} email(s) to process.")
+
+        results: List[Dict] = []
+        processed_dates: set = set()
+
+        for idx, email in enumerate(emails, start=1):
+            logger.info(
+                f"Processing email {idx}/{len(emails)}: {email.get('subject', '')!r}"
+            )
+            result = self.process_email(email)
+            results.append(result)
+
+            if result.get("status") == "SUCCESS":
+                dept = result.get("department")
+                date = result.get("date")
+                if dept and date:
+                    processed_dates.add((dept, date))
+
+        # Mark "Not Sent" only for Sales, only after processing all emails
+        for dept, date_str in processed_dates:
+            if dept == "Sales":
+                logger.info(f"Marking unsubmitted Sales employees as 'Not Sent' for {date_str}")
+                self.sheets.mark_not_sent(dept, date_str)
+            # HR: no "Not Sent" marking
+
+        success   = sum(1 for r in results if r["status"] == "SUCCESS")
+        failed    = sum(1 for r in results if r["status"] == "FAILED")
+        duplicate = sum(1 for r in results if r["status"] == "DUPLICATE")
+        logger.info(
+            f"Run complete → SUCCESS={success}  FAILED={failed}  DUPLICATE={duplicate}"
+        )
+        logger.info("═" * 60)
+        return results
+
+
+if __name__ == "__main__":
+    processor = ReportProcessor()
+    processor.run()
