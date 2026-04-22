@@ -7,6 +7,7 @@ Handles:
  • Date-row creation for every employee when a new date appears
  • Exact row lookup for (employee, date) pairs
  • Batched cell updates (minimises API calls)
+ • Font formatting: Calibri, size 13
 """
 
 import logging
@@ -103,6 +104,29 @@ class SheetsService:
         dt = datetime.strptime(date_str, DATE_IN_SUBJECT_FORMAT)
         return dt.strftime(SHEET_NAME_FORMAT)
 
+    def _apply_formatting(self, ws: gspread.Worksheet, range_str: str = None) -> None:
+        """
+        Apply Calibri font, size 13 to the specified range.
+        If range_str is None, applies to entire worksheet.
+        """
+        try:
+            if range_str is None:
+                # Apply to all cells with data
+                range_str = "A1:Z1000"
+            
+            ws.format(
+                range_str,
+                {
+                    "textFormat": {
+                        "fontFamily": "Calibri",
+                        "fontSize": 13,
+                    }
+                }
+            )
+            logger.info(f"Applied Calibri 13 formatting to {range_str}")
+        except Exception as exc:
+            logger.warning(f"Could not apply formatting to {range_str}: {exc}")
+
     def _get_worksheet(self, department: str, date_str: str) -> gspread.Worksheet:
         """Return the worksheet for a given department + date, creating it if absent."""
         ss   = self._spreadsheet(department)
@@ -130,10 +154,18 @@ class SheetsService:
 
         # Write header row
         ws.update("A1", [headers])
+        
+        # Apply formatting to header row
+        num_cols = len(headers)
+        header_range = f"A1:{chr(64 + num_cols)}1"
+        self._apply_formatting(ws, header_range)
 
         # Pre-populate employee names in column B (rows 2…N)
         name_cells = [[emp] for emp in employees]
         ws.update(f"B2:B{len(employees) + 1}", name_cells)
+        
+        # Apply formatting to employee names column
+        self._apply_formatting(ws, f"B2:B{len(employees) + 1}")
 
         logger.info(f"Sheet '{name}' created with {len(employees)} employee rows.")
         return ws
@@ -167,9 +199,12 @@ class SheetsService:
 
         # Add new rows for employees that don't have this date
         updates: List[Dict] = []
+        start_row = None
         for emp in employees:
             if emp not in has_date:
                 next_row = len(all_values) + 1 + len(updates)
+                if start_row is None:
+                    start_row = next_row
                 updates.append({
                     "range": f"A{next_row}:B{next_row}",
                     "values": [[date_str, emp]],
@@ -178,6 +213,10 @@ class SheetsService:
         if updates:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
             logger.info(f"Added date '{date_str}' for {len(updates)} employee row(s) in {ws.title}")
+            
+            # Apply formatting to newly added rows
+            end_row = start_row + len(updates) - 1
+            self._apply_formatting(ws, f"A{start_row}:B{end_row}")
 
     # ─────────────────────────────────────────
     # Row lookup
@@ -266,6 +305,10 @@ class SheetsService:
         range_str        = f"{col_letter_start}{row_number}:{col_letter_end}{row_number}"
 
         ws.update(range_str, [row_values], value_input_option="USER_ENTERED")
+        
+        # Apply formatting to written data
+        self._apply_formatting(ws, range_str)
+        
         logger.info(
             f"Written {department} data for {data.get('employee_name')} "
             f"on {date_str} → row {row_number} ({ws.title})"
@@ -290,6 +333,7 @@ class SheetsService:
         
         all_values = ws.get_all_values()
         updates: List[Dict] = []
+        ranges_to_format = []
         
         for emp in employees:
             # Find the row for this employee with this date
@@ -319,10 +363,15 @@ class SheetsService:
                         "range": f"{col_letter}{row_num}",
                         "values": [["Not Sent"]]
                     })
+                    ranges_to_format.append(f"{col_letter}{row_num}")
         
         if updates:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
             logger.info(f"Marked {len(updates)} employee(s) as 'Not Sent' for {date_str} in {department}")
+            
+            # Apply formatting to all marked cells
+            for range_str in ranges_to_format:
+                self._apply_formatting(ws, range_str)
 
     # ─────────────────────────────────────────
     # Utility
