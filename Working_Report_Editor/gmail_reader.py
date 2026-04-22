@@ -1,6 +1,6 @@
 """
 gmail_reader.py — Fetch unread emails (body + image attachments) from Gmail.
-Cloud-compatible version (no client_secret.json, no token.pickle)
+OAuth version (works for personal Gmail + Streamlit Cloud)
 """
 
 import base64
@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import streamlit as st
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -36,7 +36,7 @@ class GmailReader:
         self._service = None
 
     # ──────────────────────────────────────────
-    # Auth (FIXED FOR STREAMLIT CLOUD)
+    # Auth (OAuth for Streamlit Cloud)
     # ──────────────────────────────────────────
 
     def _get_service(self):
@@ -44,15 +44,19 @@ class GmailReader:
             return self._service
 
         try:
-            creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
+            oauth = st.secrets["GOOGLE_OAUTH"]
 
-            creds = service_account.Credentials.from_service_account_info(
-                creds_dict,
-                scopes=SCOPES
+            creds = Credentials(
+                token=None,
+                refresh_token=oauth["refresh_token"],
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=oauth["client_id"],
+                client_secret=oauth["client_secret"],
+                scopes=SCOPES,
             )
 
             self._service = build("gmail", "v1", credentials=creds)
-            logger.info("Gmail service initialised (service account).")
+            logger.info("Gmail service initialised (OAuth).")
 
         except Exception as exc:
             raise EmailFetchError(
@@ -73,7 +77,7 @@ class GmailReader:
 
         try:
             result = svc.users().messages().list(
-                userId=GMAIL_USER_ID,
+                userId="me",   # IMPORTANT for OAuth
                 q=GMAIL_QUERY,
                 maxResults=MAX_EMAILS_PER_RUN,
             ).execute()
@@ -102,7 +106,7 @@ class GmailReader:
     def _process_message(self, svc, msg_id: str) -> Optional[Dict]:
         try:
             msg = svc.users().messages().get(
-                userId=GMAIL_USER_ID, id=msg_id, format="full"
+                userId="me", id=msg_id, format="full"
             ).execute()
         except HttpError as exc:
             logger.error(f"Could not fetch message {msg_id}: {exc}")
@@ -167,7 +171,7 @@ class GmailReader:
     def _download_attachment(self, svc, msg_id, part):
         try:
             att = svc.users().messages().attachments().get(
-                userId=GMAIL_USER_ID,
+                userId="me",
                 messageId=msg_id,
                 id=part["body"]["attachmentId"]
             ).execute()
