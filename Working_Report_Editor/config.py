@@ -5,7 +5,7 @@ All secrets loaded from .env. Never hardcode credentials here.
 
 import streamlit as st
 
-API_KEY = st.secrets["GEMINI_API_KEY"]
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 
 # ─────────────────────────────────────────────
 # EMPLOYEE LISTS — Fixed order, never auto-sorted
@@ -122,7 +122,9 @@ GMAIL_USER_ID = "me"
 # ─────────────────────────────────────────────
 # GEMINI CONFIGURATION
 # ─────────────────────────────────────────────
-GEMINI_API_KEY = st.secretsv("GEMINI_API_KEY", "")
+import streamlit as st
+
+GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 GEMINI_MODEL   = "gemini-2.5-flash"
 
 # ─────────────────────────────────────────────
