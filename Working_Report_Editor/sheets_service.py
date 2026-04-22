@@ -54,6 +54,29 @@ creds = service_account.Credentials.from_service_account_info(
     creds_dict,
     scopes=SCOPES
 )
+
+import streamlit as st
+import gspread
+from google.oauth2 import service_account
+
+# ✅ Define scopes
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+# ✅ Load credentials from secrets
+creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
+
+# ✅ Create credentials
+creds = service_account.Credentials.from_service_account_info(
+    creds_dict,
+    scopes=SCOPES
+)
+
+# ✅ Authorize client
+client = gspread.authorize(creds)
+
 class SheetsService:
     
 
