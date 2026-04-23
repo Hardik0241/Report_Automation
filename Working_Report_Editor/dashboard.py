@@ -1,21 +1,18 @@
 """
 dashboard.py — Streamlit monitoring dashboard for the Report Automation System.
-
 Run with:  streamlit run dashboard.py
 """
 
 import os
-
+import time
+import subprocess
+import sys
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from config import HR_EMPLOYEES, SALES_EMPLOYEES
-from tracker import Tracker
 
-# ─────────────────────────────────────────────
-# Page setup
-# ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Report Automation",
     page_icon="📊",
@@ -24,8 +21,6 @@ st.set_page_config(
 )
 
 st.markdown("""
-
-
 <style>
     .block-container { padding-top: 1.5rem; }
     .metric-label    { font-size: 0.85rem !important; }
@@ -34,12 +29,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ─────────────────────────────────────────────
-# Data helpers
-# ─────────────────────────────────────────────
-
+@st.cache_data(ttl=30)
 def load_logs() -> pd.DataFrame:
-    """Load logs from CSV. No caching — always fresh on each page load."""
     path = "logs/processing_logs.csv"
     if not os.path.exists(path):
         return pd.DataFrame(columns=[
@@ -51,93 +42,55 @@ def load_logs() -> pd.DataFrame:
     if "Timestamp" in df.columns:
         df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
     
-    # Handle column name change from Email_Preview to Email_Subject
     if "Email_Preview" in df.columns and "Email_Subject" not in df.columns:
         df = df.rename(columns={"Email_Preview": "Email_Subject"})
     elif "Email_Preview" in df.columns and "Email_Subject" in df.columns:
-        # If both exist, use Email_Subject and drop Email_Preview
         df = df.drop(columns=["Email_Preview"])
     
     return df
 
 
-# ─────────────────────────────────────────────
-# Sidebar
-# ─────────────────────────────────────────────
-
 with st.sidebar:
     st.title("⚙️ Controls")
 
-    if st.button("🔄 Refresh data", use_container_width=True):
-        with st.spinner("Clearing data and refreshing …"):
-            # Clear logs and cache
-            logs_file = "logs/processing_logs.csv"
-            cache_file = "logs/duplicate_cache.json"
-            
-            if os.path.exists(logs_file):
-                os.remove(logs_file)
-            if os.path.exists(cache_file):
-                os.remove(cache_file)
-            
-            # Clear session state
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            
-            st.success("Data cleared! Refreshing dashboard …")
-            st.rerun()
+    if st.button("🔄 Refresh Dashboard", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
 
     st.divider()
 
     if st.button("🚀 Run processor now", use_container_width=True):
         with st.spinner("Processing emails …"):
             try:
-                # Ensure we're in the correct working directory
-                import os
-                import sys
+                result = subprocess.run(
+                    [sys.executable, "main.py"],
+                    capture_output=True,
+                    text=True,
+                    cwd=os.path.dirname(os.path.abspath(__file__))
+                )
                 
-                # Get the directory where dashboard.py is located
-                dashboard_dir = os.path.dirname(os.path.abspath(__file__))
+                if result.returncode == 0:
+                    st.success("✅ Processor completed successfully!")
+                else:
+                    st.error(f"❌ Processor failed: {result.stderr}")
                 
-                # Change to that directory
-                original_dir = os.getcwd()
-                os.chdir(dashboard_dir)
-                
-                # Add the directory to Python path if not already there
-                if dashboard_dir not in sys.path:
-                    sys.path.insert(0, dashboard_dir)
-                
-                try:
-                    from main import ReportProcessor
-                    processor = ReportProcessor()
-                    results = processor.run()
-                    ok  = sum(1 for r in results if r["status"] == "SUCCESS")
-                    bad = sum(1 for r in results if r["status"] == "FAILED")
-                    st.success(f"Done — ✅ {ok} success, ❌ {bad} failed")
-                    st.rerun()
-                finally:
-                    # Restore original directory
-                    os.chdir(original_dir)
+                st.cache_data.clear()
+                time.sleep(2)
+                st.rerun()
             except Exception as exc:
                 st.error(f"Error: {exc}")
-                import traceback
-                st.error(traceback.format_exc())
 
     st.divider()
     st.caption(f"Sales employees: {len(SALES_EMPLOYEES)}")
     st.caption(f"HR employees:    {len(HR_EMPLOYEES)}")
 
-    st.caption("📌 Processor runs ONLY when you click 'Run processor now'")
-    st.caption("No automatic processing on dashboard startup")
+    auto_refresh = st.checkbox("Auto-refresh (30 seconds)", value=True)
 
-# ─────────────────────────────────────────────
-# Main
-# ─────────────────────────────────────────────
 
 st.title("📊 Daily Report Automation Dashboard")
 
 df = load_logs()
 
-# ── Metrics row ──────────────────────────────
 total   = len(df)
 success = int((df["Status"] == "SUCCESS").sum())  if not df.empty else 0
 failed  = int((df["Status"] == "FAILED").sum())   if not df.empty else 0
@@ -157,7 +110,6 @@ if df.empty:
     st.info("No logs yet. Click **Run processor now** to start.")
     st.stop()
 
-# ── Trend chart ───────────────────────────────
 st.subheader("📈 Processing Trend")
 
 if "Timestamp" in df.columns and not df["Timestamp"].isna().all():
@@ -176,7 +128,6 @@ if "Timestamp" in df.columns and not df["Timestamp"].isna().all():
     fig.update_layout(margin=dict(t=20, b=20), height=280)
     st.plotly_chart(fig, use_container_width=True)
 
-# ── Department & employee charts ─────────────
 col_left, col_right = st.columns(2)
 
 with col_left:
@@ -210,7 +161,6 @@ with col_right:
         fig3.update_layout(height=260, margin=dict(t=10, b=10), yaxis=dict(autorange="reversed"))
         st.plotly_chart(fig3, use_container_width=True)
 
-# ── Failure analysis ──────────────────────────
 st.subheader("❌ Failure Analysis")
 fail_df = df[df["Status"] == "FAILED"]
 if not fail_df.empty:
@@ -238,10 +188,8 @@ else:
 
 st.divider()
 
-# ── Detailed log table ────────────────────────
 st.subheader("📋 Full Log")
 
-# Filters
 fc1, fc2, fc3 = st.columns(3)
 with fc1:
     status_filter = st.multiselect(
@@ -274,6 +222,10 @@ st.dataframe(
     height=400,
 )
 
-# Download
 csv_bytes = filtered.to_csv(index=False).encode()
 st.download_button("📥 Download CSV", csv_bytes, "report_logs.csv", "text/csv")
+
+if auto_refresh:
+    time.sleep(30)
+    st.cache_data.clear()
+    st.rerun()
