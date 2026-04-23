@@ -1,6 +1,7 @@
 """
 sheets_service.py — All Google Sheets operations.
 
+Auth: Streamlit Cloud via st.secrets["GOOGLE_CREDENTIALS"]
 Handles:
  • Auto-detection of the correct monthly sheet ("Mar-2026", "Apr-2026", …)
  • Sheet creation with headers + employee rows if the sheet doesn't exist yet
@@ -11,35 +12,12 @@ Handles:
 """
 
 import logging
-import time
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import gspread
-
 import streamlit as st
-import gspread
 from google.oauth2 import service_account
-
-# 1. Define scopes
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
-
-# 2. Load credentials from secrets
-creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
-
-# 3. Create credentials
-creds = service_account.Credentials.from_service_account_info(
-    creds_dict,
-    scopes=SCOPES
-)
-
-# 4. Authorize client (AFTER creds is created)
-client = gspread.authorize(creds)
-
-from google.oauth2.service_account import Credentials
 
 from config import (
     DATE_IN_SUBJECT_FORMAT,
@@ -53,40 +31,32 @@ from config import (
     SALES_SPREADSHEET_ID,
     SHEET_NAME_FORMAT,
 )
-from error_handler import SheetUpdateError, with_retry
+from error_handler import with_retry
 
 logger = logging.getLogger(__name__)
 
 _SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive",
 ]
 
-from google.oauth2 import service_account
-import streamlit as st
 
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
-
-creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
-
-creds = service_account.Credentials.from_service_account_info(
-    creds_dict,
-    scopes=SCOPES
-)
-
+def _get_gspread_client() -> gspread.Client:
+    """
+    Create and return an authorised gspread client using
+    credentials stored in st.secrets["GOOGLE_CREDENTIALS"].
+    """
+    creds = service_account.Credentials.from_service_account_info(
+        st.secrets["GOOGLE_CREDENTIALS"],
+        scopes=_SCOPES,
+    )
+    return gspread.authorize(creds)
 
 
 class SheetsService:
-    
 
     def __init__(self):
-        import streamlit as st
-        from google.oauth2 import service_account
-        creds_dict = st.secrets["GOOGLE_CREDENTIALS"]
-        client = gspread.authorize(creds)
+        client = _get_gspread_client()
         self._sales_ss = client.open_by_key(SALES_SPREADSHEET_ID)
         self._hr_ss    = client.open_by_key(HR_SPREADSHEET_ID)
         logger.info("SheetsService: connected to Sales and HR spreadsheets.")
@@ -104,16 +74,9 @@ class SheetsService:
         dt = datetime.strptime(date_str, DATE_IN_SUBJECT_FORMAT)
         return dt.strftime(SHEET_NAME_FORMAT)
 
-    def _apply_formatting(self, ws: gspread.Worksheet, range_str: str = None) -> None:
-        """
-        Apply Calibri font, size 13 to the specified range.
-        If range_str is None, applies to entire worksheet.
-        """
+    def _apply_formatting(self, ws: gspread.Worksheet, range_str: str = "A1:Z1000") -> None:
+        """Apply Calibri font size 13 to the specified range."""
         try:
-            if range_str is None:
-                # Apply to all cells with data
-                range_str = "A1:Z1000"
-            
             ws.format(
                 range_str,
                 {
@@ -121,9 +84,8 @@ class SheetsService:
                         "fontFamily": "Calibri",
                         "fontSize": 13,
                     }
-                }
+                },
             )
-            logger.info(f"Applied Calibri 13 formatting to {range_str}")
         except Exception as exc:
             logger.warning(f"Could not apply formatting to {range_str}: {exc}")
 
@@ -131,7 +93,6 @@ class SheetsService:
         """Return the worksheet for a given department + date, creating it if absent."""
         ss   = self._spreadsheet(department)
         name = self.sheet_name(date_str)
-
         try:
             ws = ss.worksheet(name)
             logger.debug(f"Using existing sheet '{name}' ({department})")
@@ -150,21 +111,19 @@ class SheetsService:
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
         headers   = SALES_HEADERS    if department == "Sales" else HR_HEADERS
 
-        ws = ss.add_worksheet(title=name, rows=str(len(employees) * 35 + 10), cols="20")
+        ws = ss.add_worksheet(
+            title=name,
+            rows=str(len(employees) * 35 + 10),
+            cols="20",
+        )
 
         # Write header row
         ws.update("A1", [headers])
-        
-        # Apply formatting to header row
-        num_cols = len(headers)
-        header_range = f"A1:{chr(64 + num_cols)}1"
-        self._apply_formatting(ws, header_range)
+        self._apply_formatting(ws, f"A1:{chr(64 + len(headers))}1")
 
         # Pre-populate employee names in column B (rows 2…N)
         name_cells = [[emp] for emp in employees]
         ws.update(f"B2:B{len(employees) + 1}", name_cells)
-        
-        # Apply formatting to employee names column
         self._apply_formatting(ws, f"B2:B{len(employees) + 1}")
 
         logger.info(f"Sheet '{name}' created with {len(employees)} employee rows.")
@@ -181,13 +140,11 @@ class SheetsService:
         """
         Ensure every employee has a row for `date_str`.
         Adds new rows at the end for employees that don't have this date yet.
-        This should be called ONCE before writing any individual row.
+        Call this ONCE before writing any individual row.
         """
-        employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
-        ws        = self._get_worksheet(department, date_str)
-
-        # Fetch all values
-        all_values = ws.get_all_values()   # list of rows (each row = list of cells)
+        employees  = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
+        ws         = self._get_worksheet(department, date_str)
+        all_values = ws.get_all_values()
 
         # Find which employees already have this date
         has_date: set = set()
@@ -197,26 +154,24 @@ class SheetsService:
                 if name:
                     has_date.add(name)
 
-        # Add new rows for employees that don't have this date
+        # Add rows for employees missing this date
         updates: List[Dict] = []
-        start_row = None
         for emp in employees:
             if emp not in has_date:
                 next_row = len(all_values) + 1 + len(updates)
-                if start_row is None:
-                    start_row = next_row
                 updates.append({
-                    "range": f"A{next_row}:B{next_row}",
+                    "range":  f"A{next_row}:B{next_row}",
                     "values": [[date_str, emp]],
                 })
 
         if updates:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
-            logger.info(f"Added date '{date_str}' for {len(updates)} employee row(s) in {ws.title}")
-            
-            # Apply formatting to newly added rows
-            end_row = start_row + len(updates) - 1
+            start_row = len(all_values) + 1
+            end_row   = start_row + len(updates) - 1
             self._apply_formatting(ws, f"A{start_row}:B{end_row}")
+            logger.info(
+                f"Added date '{date_str}' for {len(updates)} employee(s) in {ws.title}"
+            )
 
     # ─────────────────────────────────────────
     # Row lookup
@@ -240,7 +195,8 @@ class SheetsService:
                 return i
 
         logger.warning(
-            f"Row not found: {employee_name} / {date_str} in {department} sheet {self.sheet_name(date_str)}"
+            f"Row not found: {employee_name} / {date_str} "
+            f"in {department} sheet {self.sheet_name(date_str)}"
         )
         return None
 
@@ -251,92 +207,88 @@ class SheetsService:
     @with_retry()
     def write_data(
         self,
-        department:    str,
-        date_str:      str,
-        row_number:    int,
-        data:          Dict,
+        department: str,
+        date_str:   str,
+        row_number: int,
+        data:       Dict,
     ) -> None:
         """
         Write all data fields for a single employee row in one batched update.
-        Only writes the department-relevant columns.
-        Auto-fills missing columns with defaults (0 for numeric, empty for text).
+        Auto-fills missing columns with sensible defaults.
         """
         ws      = self._get_worksheet(department, date_str)
         mapping = SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
 
-        # Build a dict: col_index → value
         cell_updates: Dict[int, object] = {}
         for field, col in mapping.items():
             if field in ("Date", "Employee Name"):
-                continue   # These are already populated
-            
-            # Get value from data, or use auto-fill default
+                continue   # already populated
+
             if field in data:
                 val = data[field]
             else:
-                # Auto-fill missing fields with defaults
+                # Default values for missing fields
                 if field == "Duration":
                     val = "00:00:00"
-                elif field in ("Ref Added", "status Viewed", "Document Collected", 
-                              "Total Calls", "Connected Calls", "Total Dialed", "Total Connected", 
-                              "Interview Held", "Tomorrow Interview Lineups", "Prospect"):
-                    # All numeric/count fields default to 0
+                elif field in (
+                    "Ref Added", "status Viewed", "Document Collected",
+                    "Total Calls", "Connected Calls",
+                    "Total Dialed", "Total Connected",
+                    "Interview Held", "Tomorrow Interview Lineups", "Prospect",
+                ):
                     val = 0
                 else:
                     val = ""
-            
+
             cell_updates[col] = val
 
         if not cell_updates:
             logger.warning("write_data: no fields to update.")
             return
 
-        # Sort by column and batch as a single row update
         cols_sorted = sorted(cell_updates)
-        min_col = cols_sorted[0]
-        max_col = cols_sorted[-1]
+        min_col     = cols_sorted[0]
+        max_col     = cols_sorted[-1]
 
         row_values = [""] * (max_col - min_col + 1)
         for col, val in cell_updates.items():
             row_values[col - min_col] = val
 
-        col_letter_start = gspread.utils.rowcol_to_a1(row_number, min_col).rstrip("0123456789")
-        col_letter_end   = gspread.utils.rowcol_to_a1(row_number, max_col).rstrip("0123456789")
-        range_str        = f"{col_letter_start}{row_number}:{col_letter_end}{row_number}"
+        col_start = gspread.utils.rowcol_to_a1(row_number, min_col).rstrip("0123456789")
+        col_end   = gspread.utils.rowcol_to_a1(row_number, max_col).rstrip("0123456789")
+        range_str = f"{col_start}{row_number}:{col_end}{row_number}"
 
         ws.update(range_str, [row_values], value_input_option="USER_ENTERED")
-        
-        # Apply formatting to written data
         self._apply_formatting(ws, range_str)
-        
+
         logger.info(
             f"Written {department} data for {data.get('employee_name')} "
             f"on {date_str} → row {row_number} ({ws.title})"
         )
-    
+
+    # ─────────────────────────────────────────
+    # Not Sent marking (Sales only)
+    # ─────────────────────────────────────────
+
     @with_retry()
-    def mark_not_sent(
-        self,
-        department: str,
-        date_str:   str,
-    ) -> None:
+    def mark_not_sent(self, department: str, date_str: str) -> None:
         """
-        Mark all employees who haven't submitted data for a date as 'Not Sent'.
-        Finds rows with the date that have no data, and fills the first data column with 'Not Sent'.
+        Mark all employees who haven't submitted data for date_str as 'Not Sent'.
+        Only called for Sales department.
         """
         ws        = self._get_worksheet(department, date_str)
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
         mapping   = SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
-        
-        # Get the first data column (skip Date and Employee Name)
-        first_data_col = min([col for field, col in mapping.items() if field not in ("Date", "Employee Name")])
-        
+
+        first_data_col = min(
+            col for field, col in mapping.items()
+            if field not in ("Date", "Employee Name")
+        )
+
         all_values = ws.get_all_values()
         updates: List[Dict] = []
-        ranges_to_format = []
-        
+
         for emp in employees:
-            # Find the row for this employee with this date
             row_num = None
             for i, row in enumerate(all_values[1:], start=2):
                 row_date = row[0].strip() if len(row) > 0 else ""
@@ -344,34 +296,40 @@ class SheetsService:
                 if row_date == date_str and row_name.lower() == emp.lower():
                     row_num = i
                     break
-            
-            if row_num:
-                # Check if this row has any data in the data columns
-                has_data = False
-                for field, col in mapping.items():
-                    if field not in ("Date", "Employee Name"):
-                        if col <= len(all_values[row_num - 1]):
-                            cell_val = all_values[row_num - 1][col - 1].strip() if col - 1 < len(all_values[row_num - 1]) else ""
-                            if cell_val:
-                                has_data = True
-                                break
-                
-                # If no data, mark as "Not Sent"
-                if not has_data:
-                    col_letter = gspread.utils.rowcol_to_a1(row_num, first_data_col).rstrip("0123456789")
-                    updates.append({
-                        "range": f"{col_letter}{row_num}",
-                        "values": [["Not Sent"]]
-                    })
-                    ranges_to_format.append(f"{col_letter}{row_num}")
-        
+
+            if not row_num:
+                continue
+
+            # Check if row already has data
+            has_data = False
+            for field, col in mapping.items():
+                if field not in ("Date", "Employee Name"):
+                    cell_val = (
+                        all_values[row_num - 1][col - 1].strip()
+                        if col - 1 < len(all_values[row_num - 1])
+                        else ""
+                    )
+                    if cell_val:
+                        has_data = True
+                        break
+
+            if not has_data:
+                col_letter = gspread.utils.rowcol_to_a1(
+                    row_num, first_data_col
+                ).rstrip("0123456789")
+                updates.append({
+                    "range":  f"{col_letter}{row_num}",
+                    "values": [["Not Sent"]],
+                })
+
         if updates:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
-            logger.info(f"Marked {len(updates)} employee(s) as 'Not Sent' for {date_str} in {department}")
-            
-            # Apply formatting to all marked cells
-            for range_str in ranges_to_format:
-                self._apply_formatting(ws, range_str)
+            for u in updates:
+                self._apply_formatting(ws, u["range"])
+            logger.info(
+                f"Marked {len(updates)} employee(s) as 'Not Sent' "
+                f"for {date_str} in {department}"
+            )
 
     # ─────────────────────────────────────────
     # Utility
@@ -379,24 +337,17 @@ class SheetsService:
 
     def list_sheets(self, department: str) -> List[str]:
         return [ws.title for ws in self._spreadsheet(department).worksheets()]
-    
+
     def get_employees_for_date(
-        self,
-        department: str,
-        date_str:   str,
+        self, department: str, date_str: str
     ) -> Dict[str, int]:
-        """
-        Get all employees and their row numbers for a given date.
-        Returns: {employee_name: row_number}
-        """
-        ws = self._get_worksheet(department, date_str)
+        """Returns {employee_name: row_number} for a given date."""
+        ws         = self._get_worksheet(department, date_str)
         all_values = ws.get_all_values()
-        
-        emp_rows = {}
+        emp_rows   = {}
         for i, row in enumerate(all_values[1:], start=2):
             row_date = row[0].strip() if len(row) > 0 else ""
             row_name = row[1].strip() if len(row) > 1 else ""
             if row_date == date_str and row_name:
                 emp_rows[row_name] = i
-        
         return emp_rows
