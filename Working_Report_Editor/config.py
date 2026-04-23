@@ -13,11 +13,11 @@ GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
 SALES_EMPLOYEES = [
     "Apoorva", "Abhijit", "Sakib", "Jayesh",
     "Saif", "Rajesh", "Manasvi", "Praful", "Sachin", "Aishwary",
-    "Sayli", "Dhanshree", "Muskan",
+    "Sayli", "Dhanshree", "Muskan", "Kalpita", "Komal", "Siddhesh",
 ]
 
 HR_EMPLOYEES = [
-    "Ruwaida", "Amanpreet", "Mehvish", "Deep"
+    "Ruwaida", "Amanpreet", "Mehvish",
 ]
 
 # ─────────────────────────────────────────────
@@ -41,13 +41,15 @@ SALES_EMAIL_MAP = {
     "saylip.edujam@gmail.com":     "Sayli",
     "dhanshree.edujam@gmail.com": "Dhanshree",
     "muskan.edujam@gmail.com":    "Muskan",
+    "kalpita.edujam@gmail.com":    "Kalpita",
+    "komals.edujam@gmail.com":     "Komal",
+    "siddhesh.edujam@gmail.com":   "Siddhesh",
 }
 
 HR_EMAIL_MAP = {
     "ruwaida.hredujam@gmail.com":    "Ruwaida",
     "amanpreet.hredujam@gmail.com":  "Amanpreet",
     "mehvish.hredujam@gmail.com":    "Mehvish",
-    "deep.hredujam@gmail.com":       "Deep",
 }
 
 # ─────────────────────────────────────────────
