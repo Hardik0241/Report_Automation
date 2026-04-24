@@ -20,33 +20,44 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown("""
+st.markdown(
+    """
 <style>
     .block-container { padding-top: 1.5rem; }
     .metric-label    { font-size: 0.85rem !important; }
     div[data-testid="stMetric"] > div { border-radius: 8px; padding: 0.5rem; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_data(ttl=30)
 def load_logs() -> pd.DataFrame:
     path = "logs/processing_logs.csv"
     if not os.path.exists(path):
-        return pd.DataFrame(columns=[
-            "Timestamp", "Email_ID", "Email_Subject", "Status",
-            "Department", "Employee_Name", "Date", "Reason",
-            "Processing_Time_Sec",
-        ])
+        return pd.DataFrame(
+            columns=[
+                "Timestamp",
+                "Email_ID",
+                "Email_Subject",
+                "Status",
+                "Department",
+                "Employee_Name",
+                "Date",
+                "Reason",
+                "Processing_Time_Sec",
+            ]
+        )
     df = pd.read_csv(path)
     if "Timestamp" in df.columns:
         df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
-    
+
     if "Email_Preview" in df.columns and "Email_Subject" not in df.columns:
         df = df.rename(columns={"Email_Preview": "Email_Subject"})
     elif "Email_Preview" in df.columns and "Email_Subject" in df.columns:
         df = df.drop(columns=["Email_Preview"])
-    
+
     return df
 
 
@@ -66,14 +77,14 @@ with st.sidebar:
                     [sys.executable, "main.py"],
                     capture_output=True,
                     text=True,
-                    cwd=os.path.dirname(os.path.abspath(__file__))
+                    cwd=os.path.dirname(os.path.abspath(__file__)),
                 )
-                
+
                 if result.returncode == 0:
                     st.success("✅ Processor completed successfully!")
                 else:
                     st.error(f"❌ Processor failed: {result.stderr}")
-                
+
                 st.cache_data.clear()
                 time.sleep(2)
                 st.rerun()
@@ -91,18 +102,18 @@ st.title("📊 Daily Report Automation Dashboard")
 
 df = load_logs()
 
-total   = len(df)
-success = int((df["Status"] == "SUCCESS").sum())  if not df.empty else 0
-failed  = int((df["Status"] == "FAILED").sum())   if not df.empty else 0
-dupes   = int((df["Status"] == "DUPLICATE").sum()) if not df.empty else 0
-rate    = f"{success / total * 100:.1f}%" if total else "—"
+total = len(df)
+success = int((df["Status"] == "SUCCESS").sum()) if not df.empty else 0
+failed = int((df["Status"] == "FAILED").sum()) if not df.empty else 0
+dupes = int((df["Status"] == "DUPLICATE").sum()) if not df.empty else 0
+rate = f"{success / total * 100:.1f}%" if total else "—"
 
 c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Total Emails",  total)
-c2.metric("✅ Success",    success)
-c3.metric("❌ Failed",     failed)
-c4.metric("🔁 Duplicate",  dupes)
-c5.metric("Success Rate",  rate)
+c1.metric("Total Emails", total)
+c2.metric("✅ Success", success)
+c3.metric("❌ Failed", failed)
+c4.metric("🔁 Duplicate", dupes)
+c5.metric("Success Rate", rate)
 
 st.divider()
 
@@ -115,14 +126,21 @@ st.subheader("📈 Processing Trend")
 if "Timestamp" in df.columns and not df["Timestamp"].isna().all():
     trend_df = (
         df.dropna(subset=["Timestamp"])
-          .assign(Date=lambda d: d["Timestamp"].dt.date)
-          .groupby(["Date", "Status"])
-          .size()
-          .reset_index(name="Count")
+        .assign(Date=lambda d: d["Timestamp"].dt.date)
+        .groupby(["Date", "Status"])
+        .size()
+        .reset_index(name="Count")
     )
     fig = px.bar(
-        trend_df, x="Date", y="Count", color="Status",
-        color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444", "DUPLICATE": "#f59e0b"},
+        trend_df,
+        x="Date",
+        y="Count",
+        color="Status",
+        color_discrete_map={
+            "SUCCESS": "#22c55e",
+            "FAILED": "#ef4444",
+            "DUPLICATE": "#f59e0b",
+        },
         barmode="group",
     )
     fig.update_layout(margin=dict(t=20, b=20), height=280)
@@ -134,13 +152,17 @@ with col_left:
     st.subheader("🏢 By Department")
     dept_df = (
         df[df["Status"] == "SUCCESS"]["Department"]
-          .value_counts()
-          .reset_index(name="Count")
+        .value_counts()
+        .reset_index(name="Count")
     )
     dept_df.columns = ["Department", "Count"]
     if not dept_df.empty:
-        fig2 = px.pie(dept_df, names="Department", values="Count",
-                      color_discrete_sequence=["#3b82f6", "#a855f7"])
+        fig2 = px.pie(
+            dept_df,
+            names="Department",
+            values="Count",
+            color_discrete_sequence=["#3b82f6", "#a855f7"],
+        )
         fig2.update_layout(height=260, margin=dict(t=10, b=10))
         st.plotly_chart(fig2, use_container_width=True)
 
@@ -148,39 +170,59 @@ with col_right:
     st.subheader("👤 Top Employees (Success)")
     emp_df = (
         df[df["Status"] == "SUCCESS"]["Employee_Name"]
-          .value_counts()
-          .head(10)
-          .reset_index(name="Count")
+        .value_counts()
+        .head(10)
+        .reset_index(name="Count")
     )
     emp_df.columns = ["Employee", "Count"]
     if not emp_df.empty:
         fig3 = px.bar(
-            emp_df, x="Count", y="Employee", orientation="h",
+            emp_df,
+            x="Count",
+            y="Employee",
+            orientation="h",
             color_discrete_sequence=["#22c55e"],
         )
-        fig3.update_layout(height=260, margin=dict(t=10, b=10), yaxis=dict(autorange="reversed"))
+        fig3.update_layout(
+            height=260, margin=dict(t=10, b=10), yaxis=dict(autorange="reversed")
+        )
         st.plotly_chart(fig3, use_container_width=True)
 
 st.subheader("❌ Failure Analysis")
 fail_df = df[df["Status"] == "FAILED"]
 if not fail_df.empty:
     reason_counts = (
-        fail_df["Reason"].str[:80].value_counts().head(10)
-          .reset_index(name="Count")
+        fail_df["Reason"].str[:80]
+        .value_counts()
+        .head(10)
+        .reset_index(name="Count")
     )
     reason_counts.columns = ["Reason", "Count"]
     fig4 = px.bar(
-        reason_counts, x="Count", y="Reason", orientation="h",
+        reason_counts,
+        x="Count",
+        y="Reason",
+        orientation="h",
         color_discrete_sequence=["#ef4444"],
     )
-    fig4.update_layout(height=240, margin=dict(t=10, b=10), yaxis=dict(autorange="reversed"))
+    fig4.update_layout(
+        height=240, margin=dict(t=10, b=10), yaxis=dict(autorange="reversed")
+    )
     st.plotly_chart(fig4, use_container_width=True)
 
     with st.expander("Show recent failures"):
         st.dataframe(
-            fail_df[["Timestamp", "Department", "Employee_Name", "Date", "Reason"]]
-              .sort_values("Timestamp", ascending=False)
-              .head(30),
+            fail_df[
+                [
+                    "Timestamp",
+                    "Department",
+                    "Employee_Name",
+                    "Date",
+                    "Reason",
+                ]
+            ]
+            .sort_values("Timestamp", ascending=False)
+            .head(30),
             use_container_width=True,
         )
 else:
@@ -193,12 +235,13 @@ st.subheader("📋 Full Log")
 fc1, fc2, fc3 = st.columns(3)
 with fc1:
     status_filter = st.multiselect(
-        "Status", ["SUCCESS", "FAILED", "DUPLICATE"],
+        "Status",
+        ["SUCCESS", "FAILED", "DUPLICATE"],
         default=["SUCCESS", "FAILED", "DUPLICATE"],
     )
 with fc2:
     dept_options = ["All"] + sorted(df["Department"].dropna().unique().tolist())
-    dept_filter  = st.selectbox("Department", dept_options)
+    dept_filter = st.selectbox("Department", dept_options)
 with fc3:
     date_range = st.date_input("Date range", value=())
 
@@ -210,14 +253,23 @@ if dept_filter and dept_filter != "All":
 if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
     s, e = date_range
     filtered = filtered[
-        (filtered["Timestamp"].dt.date >= s) &
-        (filtered["Timestamp"].dt.date <= e)
+        (filtered["Timestamp"].dt.date >= s) & (filtered["Timestamp"].dt.date <= e)
     ]
 
 st.dataframe(
-    filtered[["Timestamp", "Status", "Department", "Employee_Name",
-              "Date", "Email_Subject", "Reason", "Processing_Time_Sec"]]
-      .sort_values("Timestamp", ascending=False),
+    filtered[
+        [
+            "Timestamp",
+            "Status",
+            "Department",
+            "Employee_Name",
+            "Date",
+            "Email_Subject",
+            "Reason",
+            "Processing_Time_Sec",
+        ]
+    ]
+    .sort_values("Timestamp", ascending=False),
     use_container_width=True,
     height=400,
 )
