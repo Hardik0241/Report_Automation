@@ -24,7 +24,8 @@ except (ImportError, FileNotFoundError, KeyError, AttributeError):
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
     SALES_SPREADSHEET_ID = os.environ.get("SALES_SPREADSHEET_ID", "")
     HR_SPREADSHEET_ID = os.environ.get("HR_SPREADSHEET_ID", "")
-    
+
+   GOOGLE_CREDENTIALS_DICT = creds_dict
     # Load GOOGLE_CREDENTIALS from JSON string or file
     creds_json = os.environ.get("GOOGLE_CREDENTIALS", "")
     if creds_json:
