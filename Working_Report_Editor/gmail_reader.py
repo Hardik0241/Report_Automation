@@ -13,7 +13,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config_cloud import (  # ← Changed from config to config_cloud
+from config import (
     GMAIL_QUERY,
     GMAIL_USER_ID,
     MAX_EMAILS_PER_RUN,
