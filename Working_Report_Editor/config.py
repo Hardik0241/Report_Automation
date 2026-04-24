@@ -121,7 +121,6 @@ HR_HEADERS    = list(HR_COLUMN_MAPPING.keys())
 GMAIL_QUERY        = "is:unread"
 MAX_EMAILS_PER_RUN = 50
 GMAIL_SCOPES       = [
-    "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.readonly"
 ]
 GMAIL_USER_ID = "me"
