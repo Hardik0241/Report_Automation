@@ -1,0 +1,35 @@
+name: Report Automation Scheduler
+
+on:
+  schedule:
+    - cron: '*/20 9-18 * * *'
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-processor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create logs directory
+        run: mkdir -p logs attachments
+
+      - name: Run processor
+        run: cd Working_Report_Editor && python main.py
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SALES_SPREADSHEET_ID: ${{ secrets.SALES_SPREADSHEET_ID }}
+          HR_SPREADSHEET_ID: ${{ secrets.HR_SPREADSHEET_ID }}
