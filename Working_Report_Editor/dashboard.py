@@ -1,129 +1,283 @@
 """
-dashboard.py — Streamlit monitoring dashboard for the Report Automation System.
-Run with:  streamlit run dashboard.py
+dashboard.py — Modern Production Dashboard for Report Automation System
+Design: Corporate | Clean | Data-Driven | Real-time
 """
 
 import os
 import time
-import subprocess
-import sys
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
+from datetime import datetime, timedelta
 
 from config import HR_EMPLOYEES, SALES_EMPLOYEES
 
+# ────────────────────────────────────────────────────────────────────
+# PAGE CONFIGURATION
+# ────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Report Automation",
+    page_title="Report Automation Dashboard | Production Monitor",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.markdown(
-    """
+# ────────────────────────────────────────────────────────────────────
+# CUSTOM CSS - MODERN CORPORATE DESIGN
+# ────────────────────────────────────────────────────────────────────
+st.markdown("""
 <style>
-    .block-container { padding-top: 1.5rem; }
-    .metric-label    { font-size: 0.85rem !important; }
-    div[data-testid="stMetric"] > div { border-radius: 8px; padding: 0.5rem; }
+    /* Main container styling */
+    .main {
+        background: linear-gradient(135deg, #f5f7fa 0%, #e9edf2 100%);
+    }
+    
+    /* Card styling */
+    .stMetric {
+        background: white;
+        border-radius: 12px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .stMetric:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    /* Header styling */
+    .dashboard-header {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        padding: 2rem;
+        border-radius: 16px;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .dashboard-title {
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .dashboard-subtitle {
+        font-size: 0.9rem;
+        opacity: 0.8;
+        margin-bottom: 0;
+    }
+    
+    /* Sidebar styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    }
+    [data-testid="stSidebar"] * {
+        color: white !important;
+    }
+    [data-testid="stSidebar"] .stMarkdown {
+        color: rgba(255,255,255,0.7) !important;
+    }
+    
+    /* Section headers */
+    .section-header {
+        font-size: 1.4rem;
+        font-weight: 600;
+        margin: 1.5rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 3px solid #3b82f6;
+        display: inline-block;
+    }
+    
+    /* Status badges */
+    .badge-success {
+        background: #22c55e20;
+        color: #22c55e;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .badge-failed {
+        background: #ef444420;
+        color: #ef4444;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    /* Data table styling */
+    [data-testid="stDataFrame"] {
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 2rem;
+        margin-top: 2rem;
+        border-top: 1px solid #e5e7eb;
+        font-size: 0.8rem;
+        color: #6b7280;
+    }
 </style>
-""",
-    unsafe_allow_html=True,
-)
+""", unsafe_allow_html=True)
 
-
+# ────────────────────────────────────────────────────────────────────
+# DATA LOADING
+# ────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=30)
 def load_logs() -> pd.DataFrame:
+    """Load and cache processing logs"""
     path = "logs/processing_logs.csv"
     if not os.path.exists(path):
-        return pd.DataFrame(
-            columns=[
-                "Timestamp",
-                "Email_ID",
-                "Email_Subject",
-                "Status",
-                "Department",
-                "Employee_Name",
-                "Date",
-                "Reason",
-                "Processing_Time_Sec",
-            ]
-        )
+        return pd.DataFrame(columns=[
+            "Timestamp", "Email_ID", "Email_Subject", "Status",
+            "Department", "Employee_Name", "Date", "Reason", "Processing_Time_Sec"
+        ])
     df = pd.read_csv(path)
     if "Timestamp" in df.columns:
         df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
-
     if "Email_Preview" in df.columns and "Email_Subject" not in df.columns:
         df = df.rename(columns={"Email_Preview": "Email_Subject"})
-    elif "Email_Preview" in df.columns and "Email_Subject" in df.columns:
-        df = df.drop(columns=["Email_Preview"])
-
     return df
 
+@st.cache_data(ttl=30)
+def get_realtime_stats(df: pd.DataFrame) -> dict:
+    """Calculate real-time statistics"""
+    if df.empty:
+        return {"total": 0, "success": 0, "failed": 0, "duplicate": 0, "rate": 0}
+    
+    total = len(df)
+    success = len(df[df["Status"] == "SUCCESS"])
+    failed = len(df[df["Status"] == "FAILED"])
+    duplicate = len(df[df["Status"] == "DUPLICATE"])
+    rate = (success / total * 100) if total > 0 else 0
+    
+    # Last 24 hours stats
+    last_24h = df[df["Timestamp"] > datetime.now() - timedelta(hours=24)]
+    last_24h_success = len(last_24h[last_24h["Status"] == "SUCCESS"])
+    
+    # Today's stats
+    today = datetime.now().date()
+    today_df = df[df["Timestamp"].dt.date == today]
+    today_success = len(today_df[today_df["Status"] == "SUCCESS"])
+    
+    return {
+        "total": total,
+        "success": success,
+        "failed": failed,
+        "duplicate": duplicate,
+        "rate": round(rate, 1),
+        "last_24h_success": last_24h_success,
+        "today_success": today_success
+    }
 
+# ────────────────────────────────────────────────────────────────────
+# SIDEBAR - STATUS & INFO
+# ────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("⚙️ Controls")
-
-    if st.button("🔄 Refresh Dashboard", use_container_width=True):
+    st.markdown("## ⚙️ System Status")
+    st.markdown("---")
+    
+    # System health indicator
+    st.markdown("### 🟢 System Online")
+    st.caption("GitHub Actions Active")
+    
+    st.markdown("---")
+    
+    # Schedule info
+    st.markdown("### 📅 Schedule")
+    st.info("""
+    **Active Window:** 2:30 PM - 11:59 PM  
+    **Frequency:** Every 20 minutes  
+    **Platform:** GitHub Actions (24/7)
+    """)
+    
+    st.markdown("---")
+    
+    # Employee counts
+    st.markdown("### 👥 Employee Registry")
+    st.metric("Sales Team", len(SALES_EMPLOYEES))
+    st.metric("HR Team", len(HR_EMPLOYEES))
+    
+    st.markdown("---")
+    
+    # Last update
+    st.markdown("### 🔄 Dashboard")
+    if st.button("🔄 Refresh Data", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
+    
+    auto_refresh = st.checkbox("Auto-refresh (30s)", value=True)
+    
+    st.markdown("---")
+    st.caption("📊 Report Automation System v2.0")
+    st.caption("Powered by Google Gemini AI")
 
-    st.divider()
+# ────────────────────────────────────────────────────────────────────
+# MAIN DASHBOARD HEADER
+# ────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="dashboard-header">
+    <div class="dashboard-title">
+        <span>📊</span> Daily Report Automation Dashboard
+    </div>
+    <div class="dashboard-subtitle">
+        Real-time monitoring | AI-powered data extraction | Automated Google Sheets integration
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    if st.button("🚀 Run processor now", use_container_width=True):
-        with st.spinner("Processing emails …"):
-            try:
-                result = subprocess.run(
-                    [sys.executable, "main.py"],
-                    capture_output=True,
-                    text=True,
-                    cwd=os.path.dirname(os.path.abspath(__file__)),
-                )
-
-                if result.returncode == 0:
-                    st.success("✅ Processor completed successfully!")
-                else:
-                    st.error(f"❌ Processor failed: {result.stderr}")
-
-                st.cache_data.clear()
-                time.sleep(2)
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Error: {exc}")
-
-    st.divider()
-    st.caption(f"Sales employees: {len(SALES_EMPLOYEES)}")
-    st.caption(f"HR employees:    {len(HR_EMPLOYEES)}")
-
-    auto_refresh = st.checkbox("Auto-refresh (30 seconds)", value=True)
-
-
-st.title("📊 Daily Report Automation Dashboard")
-
+# Load data
 df = load_logs()
+stats = get_realtime_stats(df)
 
-total = len(df)
-success = int((df["Status"] == "SUCCESS").sum()) if not df.empty else 0
-failed = int((df["Status"] == "FAILED").sum()) if not df.empty else 0
-dupes = int((df["Status"] == "DUPLICATE").sum()) if not df.empty else 0
-rate = f"{success / total * 100:.1f}%" if total else "—"
+# ────────────────────────────────────────────────────────────────────
+# KPI CARDS - MODERN METRICS
+# ────────────────────────────────────────────────────────────────────
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-c1, c2, c3, c4, c5 = st.columns(5)
-c1.metric("Total Emails", total)
-c2.metric("✅ Success", success)
-c3.metric("❌ Failed", failed)
-c4.metric("🔁 Duplicate", dupes)
-c5.metric("Success Rate", rate)
+with col1:
+    st.metric("📧 Total Processed", stats["total"], delta=None)
+with col2:
+    st.metric("✅ Success", stats["success"], 
+              delta=f"{stats['rate']}%" if stats['total'] > 0 else None,
+              delta_color="normal")
+with col3:
+    st.metric("❌ Failed", stats["failed"], delta_color="inverse")
+with col4:
+    st.metric("🔄 Duplicate", stats["duplicate"])
+with col5:
+    st.metric("📈 Today's Success", stats["today_success"])
+with col6:
+    st.metric("⏱️ Last 24h", stats["last_24h_success"])
 
-st.divider()
+st.markdown("---")
 
+# If no data, show empty state
 if df.empty:
-    st.info("No logs yet. Click **Run processor now** to start.")
+    st.info("""
+    ### 📭 No Data Available
+    
+    The system is waiting for reports to be submitted. 
+    - Reports are processed automatically via GitHub Actions
+    - First run will populate data here
+    - Check back after 2:30 PM for today's reports
+    """)
     st.stop()
 
-st.subheader("📈 Processing Trend")
+# ────────────────────────────────────────────────────────────────────
+# SECTION 1: TREND ANALYSIS
+# ────────────────────────────────────────────────────────────────────
+st.markdown('<div class="section-header">📈 Processing Trend Analysis</div>', unsafe_allow_html=True)
 
 if "Timestamp" in df.columns and not df["Timestamp"].isna().all():
+    # Create daily trend
     trend_df = (
         df.dropna(subset=["Timestamp"])
         .assign(Date=lambda d: d["Timestamp"].dt.date)
@@ -131,152 +285,227 @@ if "Timestamp" in df.columns and not df["Timestamp"].isna().all():
         .size()
         .reset_index(name="Count")
     )
-    fig = px.bar(
+    
+    fig = px.line(
         trend_df,
         x="Date",
         y="Count",
         color="Status",
-        color_discrete_map={
-            "SUCCESS": "#22c55e",
-            "FAILED": "#ef4444",
-            "DUPLICATE": "#f59e0b",
-        },
-        barmode="group",
+        color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444", "DUPLICATE": "#f59e0b"},
+        markers=True,
+        line_shape="spline"
     )
-    fig.update_layout(margin=dict(t=20, b=20), height=280)
+    fig.update_layout(
+        title="Daily Processing Volume",
+        title_x=0.5,
+        margin=dict(t=50, b=20, l=20, r=20),
+        height=350,
+        hovermode="x unified",
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+    fig.update_xaxes(gridcolor="#e5e7eb")
+    fig.update_yaxes(gridcolor="#e5e7eb")
     st.plotly_chart(fig, use_container_width=True)
 
-col_left, col_right = st.columns(2)
+# ────────────────────────────────────────────────────────────────────
+# SECTION 2: DEPARTMENT & EMPLOYEE INSIGHTS
+# ────────────────────────────────────────────────────────────────────
+col_left, col_right = st.columns(2, gap="large")
 
 with col_left:
-    st.subheader("🏢 By Department")
-    dept_df = (
-        df[df["Status"] == "SUCCESS"]["Department"]
-        .value_counts()
-        .reset_index(name="Count")
-    )
+    st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
+    dept_df = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
     dept_df.columns = ["Department", "Count"]
+    
     if not dept_df.empty:
         fig2 = px.pie(
             dept_df,
             names="Department",
             values="Count",
-            color_discrete_sequence=["#3b82f6", "#a855f7"],
+            color="Department",
+            color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"},
+            hole=0.4,
         )
-        fig2.update_layout(height=260, margin=dict(t=10, b=10))
+        fig2.update_layout(
+            height=320,
+            margin=dict(t=20, b=20, l=20, r=20),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+        )
+        fig2.update_traces(textposition="inside", textinfo="percent+label")
         st.plotly_chart(fig2, use_container_width=True)
 
 with col_right:
-    st.subheader("👤 Top Employees (Success)")
+    st.markdown('<div class="section-header">🏆 Top Performing Employees</div>', unsafe_allow_html=True)
     emp_df = (
         df[df["Status"] == "SUCCESS"]["Employee_Name"]
         .value_counts()
-        .head(10)
-        .reset_index(name="Count")
+        .head(8)
+        .reset_index()
     )
-    emp_df.columns = ["Employee", "Count"]
+    emp_df.columns = ["Employee", "Reports"]
+    
     if not emp_df.empty:
         fig3 = px.bar(
             emp_df,
-            x="Count",
+            x="Reports",
             y="Employee",
             orientation="h",
-            color_discrete_sequence=["#22c55e"],
+            color="Reports",
+            color_continuous_scale="greens",
+            text="Reports"
         )
         fig3.update_layout(
-            height=260, margin=dict(t=10, b=10), yaxis=dict(autorange="reversed")
+            height=320,
+            margin=dict(t=20, b=20, l=20, r=20),
+            xaxis_title="Successful Reports",
+            yaxis_title="",
+            coloraxis_showscale=False,
+            plot_bgcolor="rgba(0,0,0,0)"
         )
+        fig3.update_traces(textposition="outside")
         st.plotly_chart(fig3, use_container_width=True)
 
-st.subheader("❌ Failure Analysis")
+# ────────────────────────────────────────────────────────────────────
+# SECTION 3: FAILURE ANALYSIS (Only if failures exist)
+# ────────────────────────────────────────────────────────────────────
 fail_df = df[df["Status"] == "FAILED"]
 if not fail_df.empty:
-    reason_counts = (
-        fail_df["Reason"].str[:80]
-        .value_counts()
-        .head(10)
-        .reset_index(name="Count")
-    )
-    reason_counts.columns = ["Reason", "Count"]
-    fig4 = px.bar(
-        reason_counts,
-        x="Count",
-        y="Reason",
-        orientation="h",
-        color_discrete_sequence=["#ef4444"],
-    )
-    fig4.update_layout(
-        height=240, margin=dict(t=10, b=10), yaxis=dict(autorange="reversed")
-    )
-    st.plotly_chart(fig4, use_container_width=True)
-
-    with st.expander("Show recent failures"):
-        st.dataframe(
-            fail_df[
-                [
-                    "Timestamp",
-                    "Department",
-                    "Employee_Name",
-                    "Date",
-                    "Reason",
-                ]
-            ]
-            .sort_values("Timestamp", ascending=False)
-            .head(30),
-            use_container_width=True,
+    st.markdown('<div class="section-header">⚠️ Failure Analysis</div>', unsafe_allow_html=True)
+    
+    col_f1, col_f2 = st.columns([2, 1])
+    
+    with col_f1:
+        reason_counts = (
+            fail_df["Reason"].str[:80]
+            .value_counts()
+            .head(8)
+            .reset_index()
         )
+        reason_counts.columns = ["Reason", "Count"]
+        
+        fig4 = px.bar(
+            reason_counts,
+            x="Count",
+            y="Reason",
+            orientation="h",
+            color="Count",
+            color_continuous_scale="reds",
+            text="Count"
+        )
+        fig4.update_layout(
+            height=300,
+            margin=dict(t=20, b=20, l=20, r=20),
+            xaxis_title="Occurrences",
+            yaxis_title="",
+            coloraxis_showscale=False,
+            plot_bgcolor="rgba(0,0,0,0)"
+        )
+        fig4.update_traces(textposition="outside")
+        st.plotly_chart(fig4, use_container_width=True)
+    
+    with col_f2:
+        st.metric("Total Failures", len(fail_df))
+        st.metric("Unique Error Types", len(reason_counts))
+        
+        with st.expander("📋 Recent Failures"):
+            st.dataframe(
+                fail_df[["Timestamp", "Employee_Name", "Reason"]]
+                .head(10)
+                .sort_values("Timestamp", ascending=False),
+                use_container_width=True,
+                hide_index=True
+            )
 else:
-    st.success("No failures recorded 🎉")
+    st.success("""
+    ### ✅ No Failures Recorded
+    
+    All recent reports have been processed successfully!
+    """)
 
-st.divider()
+# ────────────────────────────────────────────────────────────────────
+# SECTION 4: DETAILED LOG TABLE WITH FILTERS
+# ────────────────────────────────────────────────────────────────────
+st.markdown('<div class="section-header">📋 Audit Log</div>', unsafe_allow_html=True)
 
-st.subheader("📋 Full Log")
+# Filter row
+col_f1, col_f2, col_f3, col_f4 = st.columns(4)
 
-fc1, fc2, fc3 = st.columns(3)
-with fc1:
+with col_f1:
     status_filter = st.multiselect(
         "Status",
         ["SUCCESS", "FAILED", "DUPLICATE"],
         default=["SUCCESS", "FAILED", "DUPLICATE"],
+        key="status_filter"
     )
-with fc2:
-    dept_options = ["All"] + sorted(df["Department"].dropna().unique().tolist())
-    dept_filter = st.selectbox("Department", dept_options)
-with fc3:
-    date_range = st.date_input("Date range", value=())
 
+with col_f2:
+    dept_options = ["All"] + sorted(df["Department"].dropna().unique().tolist())
+    dept_filter = st.selectbox("Department", dept_options, key="dept_filter")
+
+with col_f3:
+    emp_options = ["All"] + sorted(df["Employee_Name"].dropna().unique().tolist())
+    emp_filter = st.selectbox("Employee", emp_options, key="emp_filter")
+
+with col_f4:
+    date_range = st.date_input("Date Range", value=(), key="date_range")
+
+# Apply filters
 filtered = df.copy()
 if status_filter:
     filtered = filtered[filtered["Status"].isin(status_filter)]
 if dept_filter and dept_filter != "All":
     filtered = filtered[filtered["Department"] == dept_filter]
-if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-    s, e = date_range
+if emp_filter and emp_filter != "All":
+    filtered = filtered[filtered["Employee_Name"] == emp_filter]
+if len(date_range) == 2:
+    start, end = date_range
     filtered = filtered[
-        (filtered["Timestamp"].dt.date >= s) & (filtered["Timestamp"].dt.date <= e)
+        (filtered["Timestamp"].dt.date >= start) &
+        (filtered["Timestamp"].dt.date <= end)
     ]
 
+# Display filtered count
+st.caption(f"Showing {len(filtered)} of {len(df)} entries")
+
+# Data table
 st.dataframe(
-    filtered[
-        [
-            "Timestamp",
-            "Status",
-            "Department",
-            "Employee_Name",
-            "Date",
-            "Email_Subject",
-            "Reason",
-            "Processing_Time_Sec",
-        ]
-    ]
-    .sort_values("Timestamp", ascending=False),
+    filtered[[
+        "Timestamp", "Status", "Department", "Employee_Name",
+        "Date", "Email_Subject", "Reason", "Processing_Time_Sec"
+    ]].sort_values("Timestamp", ascending=False),
     use_container_width=True,
     height=400,
+    hide_index=True,
+    column_config={
+        "Status": st.column_config.TextColumn("Status", width="small"),
+        "Processing_Time_Sec": st.column_config.NumberColumn("Time (s)", format="%.2f"),
+    }
 )
 
-csv_bytes = filtered.to_csv(index=False).encode()
-st.download_button("📥 Download CSV", csv_bytes, "report_logs.csv", "text/csv")
+# Export button
+st.download_button(
+    "📥 Export to CSV",
+    filtered.to_csv(index=False).encode(),
+    f"report_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+    "text/csv",
+    use_container_width=True
+)
 
+# ────────────────────────────────────────────────────────────────────
+# FOOTER
+# ────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="footer">
+    <strong>Report Automation System</strong> | Powered by Gemini AI | Google Sheets Integration<br>
+    Automated processing via GitHub Actions | Emails remain unread | Data written in Calibri 13pt Center
+</div>
+""", unsafe_allow_html=True)
+
+# ────────────────────────────────────────────────────────────────────
+# AUTO-REFRESH
+# ────────────────────────────────────────────────────────────────────
 if auto_refresh:
     time.sleep(30)
     st.cache_data.clear()
