@@ -1,38 +1,30 @@
 """
-config_cloud.py — Configuration that works for BOTH:
+config.oy — Configuration that works for BOTH:
    1. Streamlit Cloud (uses st.secrets)
    2. GitHub Actions (uses environment variables)
 """
 
+"""
+config.py — Central configuration for Report Automation System.
+"""
+import streamlit as st
 import os
 import json
 
-# ─────────────────────────────────────────────
-# Try Streamlit secrets FIRST (for Streamlit Cloud)
-# ─────────────────────────────────────────────
+# Try Streamlit secrets first
 try:
-    import streamlit as st
-    USE_STREAMLIT = True
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     SALES_SPREADSHEET_ID = st.secrets["SALES_SPREADSHEET_ID"]
     HR_SPREADSHEET_ID = st.secrets["HR_SPREADSHEET_ID"]
     GOOGLE_CREDENTIALS_DICT = dict(st.secrets["GOOGLE_CREDENTIALS"])
-    
-except (ImportError, FileNotFoundError, KeyError, AttributeError):
-    # Fallback to environment variables (for GitHub Actions)
-    USE_STREAMLIT = False
+except:
+    # Fallback to environment variables
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
     SALES_SPREADSHEET_ID = os.environ.get("SALES_SPREADSHEET_ID", "")
     HR_SPREADSHEET_ID = os.environ.get("HR_SPREADSHEET_ID", "")
-
-   GOOGLE_CREDENTIALS_DICT = creds_dict
-    # Load GOOGLE_CREDENTIALS from JSON string or file
     creds_json = os.environ.get("GOOGLE_CREDENTIALS", "")
     if creds_json:
         GOOGLE_CREDENTIALS_DICT = json.loads(creds_json)
-    elif os.path.exists("credentials.json"):
-        with open("credentials.json", "r") as f:
-            GOOGLE_CREDENTIALS_DICT = json.load(f)
     else:
         GOOGLE_CREDENTIALS_DICT = {}
 
