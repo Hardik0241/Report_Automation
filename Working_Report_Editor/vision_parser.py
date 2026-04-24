@@ -9,6 +9,8 @@ import os
 import re
 from typing import Dict, Optional
 
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 import google.generativeai as genai
 from PIL import Image, ImageEnhance, ImageFilter
 
