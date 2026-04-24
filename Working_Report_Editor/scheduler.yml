@@ -23,12 +23,6 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Create credentials.json
-        run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
-
-      - name: Create token.pickle
-        run: echo '${{ secrets.TOKEN_PICKLE_B64 }}' | base64 -d > token.pickle
-
       - name: Create logs directory
         run: mkdir -p logs attachments
 
