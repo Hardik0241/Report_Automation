@@ -21,7 +21,6 @@ from config import (
 )
 from error_handler import AttachmentError, EmailFetchError, with_retry
 
-# ✅ FIXED: Changed __name日 to __name__
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
