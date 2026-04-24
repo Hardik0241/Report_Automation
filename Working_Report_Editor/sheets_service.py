@@ -1,5 +1,6 @@
 """
 sheets_service.py — All Google Sheets operations with Calibri font, size 13, center alignment.
+Works on BOTH GitHub Actions (env vars) AND Streamlit Cloud (st.secrets)
 """
 
 import logging
@@ -34,23 +35,44 @@ _SCOPES = [
 
 
 def _get_credentials():
-    """Get credentials from GOOGLE_CREDENTIALS environment variable (GitHub Actions)"""
+    """Get credentials from: Streamlit secrets OR environment variable OR file"""
     
-    # Load from environment variable
-    creds_json = os.environ.get("GOOGLE_CREDENTIALS", "")
-    if not creds_json:
-        raise Exception("GOOGLE_CREDENTIALS environment variable is not set!")
-    
+    # Try 1: Load from Streamlit secrets (for Streamlit Cloud)
     try:
-        creds_dict = json.loads(creds_json)
-        logger.info("Successfully loaded credentials from GOOGLE_CREDENTIALS env var")
-        return service_account.Credentials.from_service_account_info(
-            creds_dict,
+        import streamlit as st
+        if "GOOGLE_CREDENTIALS" in st.secrets:
+            logger.info("Loading credentials from Streamlit secrets")
+            creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
+            return service_account.Credentials.from_service_account_info(
+                creds_dict,
+                scopes=_SCOPES,
+            )
+    except Exception as e:
+        logger.debug(f"Streamlit secrets not available: {e}")
+    
+    # Try 2: Load from GOOGLE_CREDENTIALS environment variable (GitHub Actions)
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS", "")
+    if creds_json:
+        logger.info("Loading credentials from GOOGLE_CREDENTIALS env var")
+        try:
+            creds_dict = json.loads(creds_json)
+            return service_account.Credentials.from_service_account_info(
+                creds_dict,
+                scopes=_SCOPES,
+            )
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse GOOGLE_CREDENTIALS JSON: {e}")
+            raise
+    
+    # Try 3: Load from credentials.json file (local testing)
+    if os.path.exists("credentials.json"):
+        logger.info("Loading credentials from credentials.json file")
+        return service_account.Credentials.from_service_account_file(
+            "credentials.json",
             scopes=_SCOPES,
         )
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse GOOGLE_CREDENTIALS JSON: {e}")
-        raise Exception(f"Invalid JSON in GOOGLE_CREDENTIALS: {e}")
+    
+    raise Exception("No valid credentials found in Streamlit secrets, GOOGLE_CREDENTIALS env var, or credentials.json file")
 
 
 def _get_gspread_client() -> gspread.Client:
