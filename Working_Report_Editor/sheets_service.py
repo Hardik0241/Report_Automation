@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 import gspread
 from google.oauth2 import service_account
 
-from config_cloud import (  # ← Changed from config to config_cloud
+from config import (
     DATE_IN_SUBJECT_FORMAT,
     HR_COLUMN_MAPPING,
     HR_EMPLOYEES,
