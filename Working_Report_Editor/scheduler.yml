@@ -1,29 +1,10 @@
-# .github/workflows/scheduler.yml
-#
-# Runs the email processor every 20 minutes between:
-#   2:30 PM IST = 09:00 UTC
-#   12:00 AM IST = 18:30 UTC
-#
-# Also runs at midnight IST (18:30 UTC) to mark "Not Sent" for Sales.
-#
-# HOW TO USE:
-#   1. Place this file at: .github/workflows/scheduler.yml in your GitHub repo
-#   2. Add your secrets in GitHub repo → Settings → Secrets → Actions:
-#        GEMINI_API_KEY
-#        SALES_SPREADSHEET_ID
-#        HR_SPREADSHEET_ID
-#        CREDENTIALS_JSON        ← paste the full contents of credentials.json
-#        TOKEN_PICKLE_B64        ← base64-encoded token.pickle (run encode_token.py)
-#   3. Push to GitHub — it runs automatically forever for free ✅
-
 name: Report Automation Scheduler
 
 on:
   schedule:
-    # Every 20 minutes from 09:00 to 18:40 UTC (2:30 PM to midnight IST)
-    - cron: "0,20,40 9-18 * * *"
-    - cron: "0 19 * * *"   # One final run at 19:00 UTC (12:30 AM IST) for midnight marking
-  workflow_dispatch:        # Also allows manual trigger from GitHub UI
+    - cron: '*/20 9-18 * * *'
+    - cron: '0 19 * * *'
+  workflow_dispatch:
 
 jobs:
   run-processor:
@@ -39,31 +20,35 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Cache pip packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Write credentials.json from secret
-        run: echo '${{ secrets.CREDENTIALS_JSON }}' > credentials.json
+      - name: Create credentials.json from secret
+        run: echo '${{ secrets.GOOGLE_CREDENTIALS }}' > credentials.json
 
-      - name: Write token.pickle from secret
-        run: |
-          echo '${{ secrets.TOKEN_PICKLE_B64 }}' | base64 -d > token.pickle
+      - name: Create token.pickle from secret
+        run: echo '${{ secrets.TOKEN_PICKLE_B64 }}' | base64 -d > token.pickle
 
       - name: Create .env file
         run: |
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
           echo "SALES_SPREADSHEET_ID=${{ secrets.SALES_SPREADSHEET_ID }}" >> .env
           echo "HR_SPREADSHEET_ID=${{ secrets.HR_SPREADSHEET_ID }}" >> .env
-          echo "SERVICE_ACCOUNT_FILE=credentials.json" >> .env
+          echo "GOOGLE_CREDENTIALS=${{ secrets.GOOGLE_CREDENTIALS }}" >> .env
+          echo "GMAIL_REFRESH_TOKEN=${{ secrets.GMAIL_REFRESH_TOKEN }}" >> .env
+          echo "GMAIL_CLIENT_ID=${{ secrets.GMAIL_CLIENT_ID }}" >> .env
+          echo "GMAIL_CLIENT_SECRET=${{ secrets.GMAIL_CLIENT_SECRET }}" >> .env
 
       - name: Create logs directory
         run: mkdir -p logs attachments
 
       - name: Run processor
         run: python main.py
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SALES_SPREADSHEET_ID: ${{ secrets.SALES_SPREADSHEET_ID }}
+          HR_SPREADSHEET_ID: ${{ secrets.HR_SPREADSHEET_ID }}
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
