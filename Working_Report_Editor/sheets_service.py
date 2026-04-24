@@ -34,44 +34,23 @@ _SCOPES = [
 
 
 def _get_credentials():
-    """Get credentials from either file or environment variable or Streamlit secrets."""
+    """Get credentials from GOOGLE_CREDENTIALS environment variable (GitHub Actions)"""
     
-    # Try 1: Load from credentials.json file (for local testing)
-    if os.path.exists("credentials.json"):
-        logger.info("Loading credentials from credentials.json file")
-        return service_account.Credentials.from_service_account_file(
-            "credentials.json",
+    # Load from environment variable
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS", "")
+    if not creds_json:
+        raise Exception("GOOGLE_CREDENTIALS environment variable is not set!")
+    
+    try:
+        creds_dict = json.loads(creds_json)
+        logger.info("Successfully loaded credentials from GOOGLE_CREDENTIALS env var")
+        return service_account.Credentials.from_service_account_info(
+            creds_dict,
             scopes=_SCOPES,
         )
-    
-    # Try 2: Load from GOOGLE_CREDENTIALS environment variable (GitHub Actions)
-    creds_json = os.environ.get("GOOGLE_CREDENTIALS", "")
-    if creds_json:
-        logger.info("Loading credentials from GOOGLE_CREDENTIALS env var")
-        try:
-            creds_dict = json.loads(creds_json)
-            return service_account.Credentials.from_service_account_info(
-                creds_dict,
-                scopes=_SCOPES,
-            )
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse GOOGLE_CREDENTIALS JSON: {e}")
-            raise
-    
-    # Try 3: Load from Streamlit secrets (for Streamlit Cloud)
-    try:
-        import streamlit as st
-        if "GOOGLE_CREDENTIALS" in st.secrets:
-            logger.info("Loading credentials from Streamlit secrets")
-            creds_dict = dict(st.secrets["GOOGLE_CREDENTIALS"])
-            return service_account.Credentials.from_service_account_info(
-                creds_dict,
-                scopes=_SCOPES,
-            )
-    except Exception as e:
-        logger.warning(f"Could not load from Streamlit secrets: {e}")
-    
-    raise Exception("No valid credentials found in credentials.json, GOOGLE_CREDENTIALS env var, or Streamlit secrets")
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse GOOGLE_CREDENTIALS JSON: {e}")
+        raise Exception(f"Invalid JSON in GOOGLE_CREDENTIALS: {e}")
 
 
 def _get_gspread_client() -> gspread.Client:
@@ -98,13 +77,10 @@ class SheetsService:
     def _apply_formatting(self, ws: gspread.Worksheet) -> None:
         """Apply Calibri font size 13 with center alignment to entire sheet."""
         try:
-            spreadsheet_id = ws.spreadsheet.id
-            sheet_id = ws.id
-            
             requests = [{
                 "repeatCell": {
                     "range": {
-                        "sheetId": sheet_id,
+                        "sheetId": ws.id,
                         "startRowIndex": 0,
                         "endRowIndex": 1000,
                         "startColumnIndex": 0,
@@ -156,14 +132,11 @@ class SheetsService:
             cols="20",
         )
 
-        # Write header row
         ws.update("A1", [headers])
         
-        # Pre-populate employee names in column B (rows 2…N)
         name_cells = [[emp] for emp in employees]
         ws.update(f"B2:B{len(employees) + 1}", name_cells)
         
-        # Apply formatting to the entire sheet
         self._apply_formatting(ws)
         
         logger.info(f"Sheet '{name}' created with {len(employees)} employee rows.")
@@ -173,23 +146,17 @@ class SheetsService:
     def ensure_date_for_all_employees(
         self, department: str, date_str: str
     ) -> None:
-        """
-        Ensure every employee has a row for `date_str`.
-        Adds new rows at the end for employees that don't have this date yet.
-        """
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
         ws = self._get_worksheet(department, date_str)
         all_values = ws.get_all_values()
 
-        # Find which employees already have this date
         has_date: set = set()
-        for row in all_values[1:]:  # skip header
+        for row in all_values[1:]:
             if row and row[0].strip() == date_str:
                 name = row[1].strip() if len(row) > 1 else ""
                 if name:
                     has_date.add(name)
 
-        # Add rows for employees missing this date
         updates: List[Dict] = []
         for emp in employees:
             if emp not in has_date:
@@ -208,10 +175,6 @@ class SheetsService:
     def find_employee_row(
         self, department: str, date_str: str, employee_name: str
     ) -> Optional[int]:
-        """
-        Find the 1-indexed row number where date==date_str AND name==employee_name.
-        Returns None if not found.
-        """
         ws = self._get_worksheet(department, date_str)
         all_values = ws.get_all_values()
 
@@ -232,22 +195,17 @@ class SheetsService:
         row_number: int,
         data: Dict,
     ) -> None:
-        """
-        Write all data fields for a single employee row in one batched update.
-        Auto-fills missing columns with sensible defaults.
-        """
         ws = self._get_worksheet(department, date_str)
         mapping = SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
 
         cell_updates: Dict[int, object] = {}
         for field, col in mapping.items():
             if field in ("Date", "Employee Name"):
-                continue  # already populated
+                continue
 
             if field in data:
                 val = data[field]
             else:
-                # Default values for missing fields
                 if field == "Duration":
                     val = "00:00:00"
                 elif field in (
@@ -281,16 +239,11 @@ class SheetsService:
         ws.update(range_str, [row_values], value_input_option="USER_ENTERED")
         self._apply_formatting(ws)
 
-        logger.info(f"Written {department} data for {data.get('employee_name')} on {date_str} → row {row_number} ({ws.title})")
+        logger.info(f"Written {department} data for {data.get('employee_name')} on {date_str}")
 
     @with_retry()
     def mark_not_sent(self, department: str, date_str: str) -> None:
-        """
-        Mark all employees who haven't submitted data for date_str as 'Not Sent'.
-        Only called for Sales department.
-        """
         if department != "Sales":
-            logger.info("Not Sent marking only applies to Sales department")
             return
 
         ws = self._get_worksheet(department, date_str)
@@ -317,7 +270,6 @@ class SheetsService:
             if not row_num:
                 continue
 
-            # Check if row already has data
             has_data = False
             for field, col in mapping.items():
                 if field not in ("Date", "Employee Name"):
@@ -342,16 +294,14 @@ class SheetsService:
         if updates:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
             self._apply_formatting(ws)
-            logger.info(f"Marked {len(updates)} employee(s) as 'Not Sent' for {date_str} in {department}")
+            logger.info(f"Marked {len(updates)} employee(s) as 'Not Sent' for {date_str}")
 
     def list_sheets(self, department: str) -> List[str]:
-        """Return list of all sheet names in the spreadsheet."""
         return [ws.title for ws in self._spreadsheet(department).worksheets()]
 
     def get_employees_for_date(
         self, department: str, date_str: str
     ) -> Dict[str, int]:
-        """Returns {employee_name: row_number} for a given date."""
         ws = self._get_worksheet(department, date_str)
         all_values = ws.get_all_values()
         emp_rows = {}
