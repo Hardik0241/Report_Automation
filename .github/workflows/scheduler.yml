@@ -35,3 +35,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SALES_SPREADSHEET_ID: ${{ secrets.SALES_SPREADSHEET_ID }}
           HR_SPREADSHEET_ID: ${{ secrets.HR_SPREADSHEET_ID }}
+          GMAIL_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
