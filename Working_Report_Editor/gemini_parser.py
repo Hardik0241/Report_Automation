@@ -14,6 +14,8 @@ import logging
 import re
 from typing import Dict, Optional
 
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
 import google.generativeai as genai
 
 from config import DEPARTMENT_KEYWORDS, GEMINI_API_KEY, GEMINI_MODEL
