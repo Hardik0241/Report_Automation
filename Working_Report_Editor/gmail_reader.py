@@ -1,5 +1,6 @@
 """
 gmail_reader.py — Fetch unread emails (body + image attachments) from Gmail.
+READ ONLY MODE - Emails will stay UNREAD after processing.
 """
 
 import base64
@@ -34,12 +35,30 @@ class GmailReader:
         self._oauth_creds = None
 
     def _get_oauth_creds(self):
-        """Get OAuth credentials for Gmail (works on both Streamlit Cloud and GitHub Actions)"""
+        """Get OAuth credentials for Gmail (READ ONLY - no modify permission)"""
         if self._oauth_creds:
             return self._oauth_creds
 
+        # Try environment variables first (GitHub Actions)
+        import os
+        refresh_token = os.environ.get("REFRESH_TOKEN", "")
+        client_id = os.environ.get("CLIENT_ID", "")
+        client_secret = os.environ.get("CLIENT_SECRET", "")
+
+        if refresh_token and client_id and client_secret:
+            self._oauth_creds = Credentials(
+                token=None,
+                refresh_token=refresh_token,
+                token_uri="https://oauth2.googleapis.com/token",
+                client_id=client_id,
+                client_secret=client_secret,
+                scopes=GMAIL_SCOPES,
+            )
+            logger.info("OAuth credentials loaded from environment variables")
+            return self._oauth_creds
+
+        # Try Streamlit secrets (for Streamlit Cloud)
         try:
-            # Try Streamlit secrets first
             import streamlit as st
             oauth = st.secrets.get("GOOGLE_OAUTH", {})
             if oauth:
@@ -51,26 +70,10 @@ class GmailReader:
                     client_secret=oauth.get("client_secret"),
                     scopes=GMAIL_SCOPES,
                 )
+                logger.info("OAuth credentials loaded from Streamlit secrets")
                 return self._oauth_creds
         except:
             pass
-
-        # Try environment variables (GitHub Actions)
-        import os
-        refresh_token = os.environ.get("GMAIL_REFRESH_TOKEN", "")
-        client_id = os.environ.get("GMAIL_CLIENT_ID", "")
-        client_secret = os.environ.get("GMAIL_CLIENT_SECRET", "")
-
-        if refresh_token and client_id and client_secret:
-            self._oauth_creds = Credentials(
-                token=None,
-                refresh_token=refresh_token,
-                token_uri="https://oauth2.googleapis.com/token",
-                client_id=client_id,
-                client_secret=client_secret,
-                scopes=GMAIL_SCOPES,
-            )
-            return self._oauth_creds
 
         raise Exception("No OAuth credentials found in secrets or environment")
 
@@ -80,7 +83,7 @@ class GmailReader:
 
         creds = self._get_oauth_creds()
         self._service = build("gmail", "v1", credentials=creds)
-        logger.info("Gmail service initialised")
+        logger.info("Gmail service initialised (READ ONLY - emails will stay unread)")
         return self._service
 
     @with_retry()
@@ -101,7 +104,7 @@ class GmailReader:
             ) from exc
 
         messages = result.get("messages", [])
-        logger.info(f"Found {len(messages)} unread email(s).")
+        logger.info(f"Found {len(messages)} email(s).")
 
         emails = []
         for msg_stub in messages:
@@ -145,6 +148,9 @@ class GmailReader:
         )
 
         body = "\n".join(body_parts)
+
+        # IMPORTANT: No code to mark as read
+        # Emails will remain UNREAD in your inbox
 
         return {
             "id": msg_id,
