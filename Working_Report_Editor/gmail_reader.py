@@ -35,15 +35,25 @@ class GmailReader:
         self._oauth_creds = None
 
     def _get_oauth_creds(self):
-        """Get OAuth credentials for Gmail (READ ONLY - no modify permission)"""
+        """Get OAuth credentials for Gmail (READ ONLY)"""
         if self._oauth_creds:
             return self._oauth_creds
 
-        # Try environment variables first (GitHub Actions)
         import os
-        refresh_token = os.environ.get("REFRESH_TOKEN", "")
-        client_id = os.environ.get("CLIENT_ID", "")
-        client_secret = os.environ.get("CLIENT_SECRET", "")
+
+        # Try environment variables with BOTH naming conventions
+        # First try: GMAIL_ prefixed names
+        refresh_token = os.environ.get("GMAIL_REFRESH_TOKEN", "")
+        client_id = os.environ.get("GMAIL_CLIENT_ID", "")
+        client_secret = os.environ.get("GMAIL_CLIENT_SECRET", "")
+
+        # Second try: Without GMAIL_ prefix (your GitHub secret names)
+        if not refresh_token:
+            refresh_token = os.environ.get("REFRESH_TOKEN", "")
+        if not client_id:
+            client_id = os.environ.get("CLIENT_ID", "")
+        if not client_secret:
+            client_secret = os.environ.get("CLIENT_SECRET", "")
 
         if refresh_token and client_id and client_secret:
             self._oauth_creds = Credentials(
@@ -149,8 +159,7 @@ class GmailReader:
 
         body = "\n".join(body_parts)
 
-        # IMPORTANT: No code to mark as read
-        # Emails will remain UNREAD in your inbox
+        # IMPORTANT: No code to mark as read - emails stay UNREAD
 
         return {
             "id": msg_id,
