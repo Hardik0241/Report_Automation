@@ -1,14 +1,14 @@
 """
-dashboard.py — Modern Production Dashboard for Report Automation System
+dashboard.py — Advanced Production Dashboard for Report Automation System
 Design: Corporate | Clean | Data-Driven | Real-time
+Shows: WHO sent report, EXACT time, and complete details
 """
 
 import os
-import time
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from config import HR_EMPLOYEES, SALES_EMPLOYEES
 
@@ -16,7 +16,7 @@ from config import HR_EMPLOYEES, SALES_EMPLOYEES
 # PAGE CONFIGURATION
 # ────────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Report Automation Dashboard | Production Monitor",
+    page_title="Advanced Report Automation | Production Monitor",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -32,7 +32,7 @@ st.markdown("""
         background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
     }
     
-    /* Metric card styling - DARK BACKGROUND WITH WHITE TEXT */
+    /* Metric card styling */
     div[data-testid="stMetric"] {
         background: linear-gradient(135deg, #1e2a3a 0%, #0f172a 100%);
         border-radius: 12px;
@@ -54,9 +54,6 @@ st.markdown("""
         color: #f1f5f9 !important;
         font-size: 2rem !important;
         font-weight: 700 !important;
-    }
-    div[data-testid="stMetric"] .stMetricDelta {
-        color: #22c55e !important;
     }
     
     /* Header styling */
@@ -93,9 +90,6 @@ st.markdown("""
     [data-testid="stSidebar"] .stMarkdown {
         color: #94a3b8 !important;
     }
-    [data-testid="stSidebar"] .stMetric label {
-        color: #64748b !important;
-    }
     
     /* Section headers */
     .section-header {
@@ -106,13 +100,6 @@ st.markdown("""
         border-bottom: 3px solid #3b82f6;
         display: inline-block;
         color: #f1f5f9;
-    }
-    
-    /* Info box styling */
-    .stAlert {
-        background-color: #1e293b !important;
-        border: 1px solid #334155 !important;
-        color: #cbd5e1 !important;
     }
     
     /* Data table styling */
@@ -136,18 +123,6 @@ st.markdown("""
         color: #bbf7d0 !important;
     }
     
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background-color: #1e293b !important;
-        border: 1px solid #334155 !important;
-        border-radius: 8px !important;
-        color: #e2e8f0 !important;
-    }
-    .streamlit-expanderContent {
-        background-color: #0f172a !important;
-        border-radius: 8px !important;
-    }
-    
     /* Button styling */
     .stButton button {
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
@@ -160,11 +135,6 @@ st.markdown("""
     .stButton button:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(59,130,246,0.4);
-    }
-    
-    /* Download button */
-    .stDownloadButton button {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     }
     
     /* Footer */
@@ -204,18 +174,19 @@ st.markdown("""
 # ────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=30)
 def load_logs() -> pd.DataFrame:
-    """Load and cache processing logs"""
+    """Load and cache processing logs with all details"""
     path = "logs/processing_logs.csv"
     if not os.path.exists(path):
         return pd.DataFrame(columns=[
-            "Timestamp", "Email_ID", "Email_Subject", "Status",
-            "Department", "Employee_Name", "Date", "Reason", "Processing_Time_Sec"
+            "Timestamp", "Email_ID", "Email_Subject", "Sender_Email",
+            "Sender_Name", "Received_Time", "Status", "Department",
+            "Employee_Name", "Date", "Reason", "Processing_Time_Sec"
         ])
     df = pd.read_csv(path)
     if "Timestamp" in df.columns:
         df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
-    if "Email_Preview" in df.columns and "Email_Subject" not in df.columns:
-        df = df.rename(columns={"Email_Preview": "Email_Subject"})
+    if "Received_Time" in df.columns:
+        df["Received_Time"] = pd.to_datetime(df["Received_Time"], errors="coerce")
     return df
 
 def get_realtime_stats(df: pd.DataFrame) -> dict:
@@ -223,7 +194,7 @@ def get_realtime_stats(df: pd.DataFrame) -> dict:
     if df.empty:
         return {
             "total": 0, "success": 0, "failed": 0, "duplicate": 0,
-            "rate": 0, "last_24h_success": 0, "today_success": 0
+            "rate": 0, "today_success": 0
         }
     
     total = len(df)
@@ -232,18 +203,10 @@ def get_realtime_stats(df: pd.DataFrame) -> dict:
     duplicate = len(df[df["Status"] == "DUPLICATE"])
     rate = (success / total * 100) if total > 0 else 0
     
-    # Last 24 hours stats - SAFE CHECK
-    if not df.empty and "Timestamp" in df.columns:
-        last_24h = df[df["Timestamp"] > datetime.now() - timedelta(hours=24)]
-        last_24h_success = len(last_24h[last_24h["Status"] == "SUCCESS"]) if not last_24h.empty else 0
-        
-        # Today's stats
-        today = datetime.now().date()
-        today_df = df[df["Timestamp"].dt.date == today] if not df.empty else pd.DataFrame()
-        today_success = len(today_df[today_df["Status"] == "SUCCESS"]) if not today_df.empty else 0
-    else:
-        last_24h_success = 0
-        today_success = 0
+    # Today's stats
+    today = datetime.now().date()
+    today_df = df[df["Timestamp"].dt.date == today] if not df.empty else pd.DataFrame()
+    today_success = len(today_df[today_df["Status"] == "SUCCESS"]) if not today_df.empty else 0
     
     return {
         "total": total,
@@ -251,7 +214,6 @@ def get_realtime_stats(df: pd.DataFrame) -> dict:
         "failed": failed,
         "duplicate": duplicate,
         "rate": round(rate, 1),
-        "last_24h_success": last_24h_success,
         "today_success": today_success
     }
 
@@ -262,13 +224,11 @@ with st.sidebar:
     st.markdown("## ⚙️ System Status")
     st.markdown("---")
     
-    # System health indicator
     st.markdown("### 🟢 System Online")
     st.caption("GitHub Actions Active")
     
     st.markdown("---")
     
-    # Schedule info
     st.markdown("### 📅 Schedule")
     st.info("""
     **Active Window:** 2:30 PM - 11:59 PM  
@@ -278,23 +238,19 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Employee counts
     st.markdown("### 👥 Employee Registry")
     st.metric("Sales Team", len(SALES_EMPLOYEES))
     st.metric("HR Team", len(HR_EMPLOYEES))
     
     st.markdown("---")
     
-    # Last update
     st.markdown("### 🔄 Dashboard")
     if st.button("🔄 Refresh Data", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
     
-    auto_refresh = st.checkbox("Auto-refresh (30s)", value=True)
-    
     st.markdown("---")
-    st.caption("📊 Report Automation System v2.0")
+    st.caption("📊 Advanced Report Automation System")
     st.caption("Powered by Google Gemini AI")
 
 # ────────────────────────────────────────────────────────────────────
@@ -303,7 +259,7 @@ with st.sidebar:
 st.markdown("""
 <div class="dashboard-header">
     <div class="dashboard-title">
-        <span>📊</span> Daily Report Automation Dashboard
+        <span>📊</span> Advanced Report Automation System
     </div>
     <div class="dashboard-subtitle">
         Real-time monitoring | AI-powered data extraction | Automated Google Sheets integration
@@ -316,9 +272,9 @@ df = load_logs()
 stats = get_realtime_stats(df)
 
 # ────────────────────────────────────────────────────────────────────
-# KPI CARDS - MODERN METRICS WITH VISIBLE TEXT
+# KPI CARDS - MODERN METRICS
 # ────────────────────────────────────────────────────────────────────
-col1, col2, col3, col4, col5, col6 = st.columns(6)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
     st.metric("📧 Total Processed", stats["total"])
@@ -330,8 +286,6 @@ with col4:
     st.metric("🔄 Duplicate", stats["duplicate"])
 with col5:
     st.metric("📈 Today's Success", stats["today_success"])
-with col6:
-    st.metric("⏱️ Last 24h", stats["last_24h_success"])
 
 st.markdown("---")
 
@@ -348,7 +302,29 @@ if df.empty:
     st.stop()
 
 # ────────────────────────────────────────────────────────────────────
-# SECTION 1: TREND ANALYSIS
+# SECTION 1: RECENT ACTIVITY - WHO SENT WHAT AT WHAT TIME
+# ────────────────────────────────────────────────────────────────────
+st.markdown('<div class="section-header">📨 Recent Reports (Sender & Time)</div>', unsafe_allow_html=True)
+
+# Show recent successful reports with sender and exact time
+recent_success = df[df["Status"] == "SUCCESS"].sort_values("Timestamp", ascending=False).head(15)
+
+if not recent_success.empty:
+    # Create a clean display dataframe
+    recent_display = recent_success[["Received_Time", "Sender_Name", "Employee_Name", "Department", "Date", "Processing_Time_Sec"]].copy()
+    recent_display.columns = ["📅 Received At", "👤 Sender", "👥 Employee", "🏢 Dept", "📆 Report Date", "⏱️ Process Time"]
+    
+    # Format the time columns
+    recent_display["📅 Received At"] = recent_display["📅 Received At"].dt.strftime("%d-%b-%Y %I:%M:%S %p")
+    
+    st.dataframe(recent_display, use_container_width=True, hide_index=True)
+else:
+    st.info("No successful reports yet.")
+
+st.markdown("---")
+
+# ────────────────────────────────────────────────────────────────────
+# SECTION 2: TREND ANALYSIS
 # ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">📈 Processing Trend Analysis</div>', unsafe_allow_html=True)
 
@@ -389,7 +365,7 @@ if "Timestamp" in df.columns and not df["Timestamp"].isna().all():
         st.info("Not enough data for trend analysis yet.")
 
 # ────────────────────────────────────────────────────────────────────
-# SECTION 2: DEPARTMENT & EMPLOYEE INSIGHTS
+# SECTION 3: DEPARTMENT & EMPLOYEE INSIGHTS
 # ────────────────────────────────────────────────────────────────────
 col_left, col_right = st.columns(2, gap="large")
 
@@ -458,7 +434,48 @@ with col_right:
         st.info("No employee data available yet.")
 
 # ────────────────────────────────────────────────────────────────────
-# SECTION 3: FAILURE ANALYSIS
+# SECTION 4: HOURLY SUBMISSION PATTERN
+# ────────────────────────────────────────────────────────────────────
+st.markdown('<div class="section-header">⏰ Submission Time Pattern</div>', unsafe_allow_html=True)
+
+if "Received_Time" in df.columns and not df["Received_Time"].isna().all():
+    # Extract hour from received time
+    hourly_df = df[df["Status"] == "SUCCESS"].copy()
+    hourly_df["Hour"] = hourly_df["Received_Time"].dt.hour
+    
+    hourly_counts = hourly_df.groupby(["Hour", "Department"]).size().reset_index(name="Count")
+    
+    if not hourly_counts.empty:
+        fig_hourly = px.bar(
+            hourly_counts,
+            x="Hour",
+            y="Count",
+            color="Department",
+            color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"},
+            barmode="group",
+            text="Count"
+        )
+        fig_hourly.update_layout(
+            title="Reports Submitted by Hour of Day",
+            title_x=0.5,
+            title_font_color="#f1f5f9",
+            height=300,
+            margin=dict(t=50, b=20, l=20, r=20),
+            xaxis_title="Hour of Day (24h format)",
+            yaxis_title="Number of Reports",
+            plot_bgcolor="#0f172a",
+            paper_bgcolor="#0f172a",
+            font_color="#e2e8f0"
+        )
+        fig_hourly.update_xaxes(gridcolor="#334155", tickmode="linear", tick0=0, dtick=2)
+        fig_hourly.update_yaxes(gridcolor="#334155")
+        fig_hourly.update_traces(textposition="outside", textfont_color="#e2e8f0")
+        st.plotly_chart(fig_hourly, use_container_width=True)
+    else:
+        st.info("Not enough data for hourly analysis.")
+
+# ────────────────────────────────────────────────────────────────────
+# SECTION 5: FAILURE ANALYSIS
 # ────────────────────────────────────────────────────────────────────
 fail_df = df[df["Status"] == "FAILED"]
 if not fail_df.empty:
@@ -505,9 +522,9 @@ if not fail_df.empty:
         
         with st.expander("📋 Recent Failures"):
             st.dataframe(
-                fail_df[["Timestamp", "Employee_Name", "Reason"]]
+                fail_df[["Received_Time", "Sender_Name", "Employee_Name", "Reason"]]
                 .head(10)
-                .sort_values("Timestamp", ascending=False),
+                .sort_values("Received_Time", ascending=False),
                 use_container_width=True,
                 hide_index=True
             )
@@ -519,12 +536,12 @@ else:
     """)
 
 # ────────────────────────────────────────────────────────────────────
-# SECTION 4: DETAILED LOG TABLE WITH FILTERS
+# SECTION 6: DETAILED AUDIT LOG WITH FILTERS
 # ────────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">📋 Audit Log</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-header">📋 Complete Audit Log</div>', unsafe_allow_html=True)
 
 # Filter row
-col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
 
 with col_f1:
     status_filter = st.multiselect(
@@ -543,6 +560,10 @@ with col_f3:
     emp_filter = st.selectbox("Employee", emp_options, key="emp_filter")
 
 with col_f4:
+    sender_options = ["All"] + sorted(df["Sender_Name"].dropna().unique().tolist())
+    sender_filter = st.selectbox("Sender", sender_options, key="sender_filter")
+
+with col_f5:
     date_range = st.date_input("Date Range", value=(), key="date_range")
 
 # Apply filters
@@ -553,30 +574,45 @@ if dept_filter and dept_filter != "All":
     filtered = filtered[filtered["Department"] == dept_filter]
 if emp_filter and emp_filter != "All":
     filtered = filtered[filtered["Employee_Name"] == emp_filter]
+if sender_filter and sender_filter != "All":
+    filtered = filtered[filtered["Sender_Name"] == sender_filter]
 if len(date_range) == 2:
     start, end = date_range
     filtered = filtered[
-        (filtered["Timestamp"].dt.date >= start) &
-        (filtered["Timestamp"].dt.date <= end)
+        (filtered["Received_Time"].dt.date >= start) &
+        (filtered["Received_Time"].dt.date <= end)
     ]
 
 # Display filtered count
 st.caption(f"Showing {len(filtered)} of {len(df)} entries")
 
-# Data table
-st.dataframe(
-    filtered[[
-        "Timestamp", "Status", "Department", "Employee_Name",
-        "Date", "Email_Subject", "Reason", "Processing_Time_Sec"
-    ]].sort_values("Timestamp", ascending=False),
-    use_container_width=True,
-    height=400,
-    hide_index=True,
-    column_config={
-        "Status": st.column_config.TextColumn("Status", width="small"),
-        "Processing_Time_Sec": st.column_config.NumberColumn("Time (s)", format="%.2f"),
-    }
-)
+# Enhanced data table with all details
+if not filtered.empty:
+    display_df = filtered[[
+        "Received_Time", "Sender_Name", "Employee_Name", "Department",
+        "Date", "Status", "Email_Subject", "Processing_Time_Sec", "Reason"
+    ]].copy()
+    
+    display_df.columns = [
+        "📅 Received Time", "📧 Sender", "👥 Employee", "🏢 Dept",
+        "📆 Report Date", "✅ Status", "📝 Subject", "⏱️ Time (s)", "❌ Reason"
+    ]
+    
+    # Format datetime
+    display_df["📅 Received Time"] = display_df["📅 Received Time"].dt.strftime("%d-%b-%Y %I:%M:%S %p")
+    
+    st.dataframe(
+        display_df.sort_values("📅 Received Time", ascending=False),
+        use_container_width=True,
+        height=450,
+        hide_index=True,
+        column_config={
+            "✅ Status": st.column_config.TextColumn("Status", width="small"),
+            "⏱️ Time (s)": st.column_config.NumberColumn("Time (s)", format="%.2f"),
+        }
+    )
+else:
+    st.info("No matching records found.")
 
 # Export button
 if not filtered.empty:
@@ -584,7 +620,7 @@ if not filtered.empty:
     st.download_button(
         "📥 Export to CSV",
         csv_data,
-        f"report_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        f"audit_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
         "text/csv",
         use_container_width=True
     )
@@ -594,15 +630,7 @@ if not filtered.empty:
 # ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="footer">
-    <strong>Report Automation System</strong> | Powered by Gemini AI | Google Sheets Integration<br>
+    <strong>Advanced Report Automation System</strong> | Powered by Gemini AI | Google Sheets Integration<br>
     Automated processing via GitHub Actions | Emails remain unread | Data written in Calibri 13pt Center
 </div>
 """, unsafe_allow_html=True)
-
-# ────────────────────────────────────────────────────────────────────
-# AUTO-REFRESH
-# ────────────────────────────────────────────────────────────────────
-if auto_refresh:
-    time.sleep(30)
-    st.cache_data.clear()
-    st.rerun()
