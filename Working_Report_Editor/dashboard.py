@@ -244,7 +244,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    st.markdown("### 🔄 Dashboard")
+    st.markdown("### Dashboard Page")
     if st.button("🔄 Refresh Data", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
