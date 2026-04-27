@@ -1,3 +1,4 @@
+# File: Working_Report_Editor/main.py
 """
 main.py — Production pipeline orchestrator.
 
@@ -67,10 +68,33 @@ class ReportProcessor:
         received_ms: int      = email.get("received_ms", 0)
         preview     = (subject or body)[:120]
 
+        # Parse sender header into email + name
+        sender_email = extract_email_address(from_header)
+        # Try to extract display name (part before angle brackets) otherwise use sender_email
+        sender_name = ""
+        if "<" in from_header and ">" in from_header:
+            try:
+                sender_name = from_header.split("<")[0].strip().strip('"').strip()
+            except Exception:
+                sender_name = sender_email
+        else:
+            # If header contains a name-like part, use it; else use email
+            possible_name = from_header.split("<")[0].strip().strip('"').strip()
+            sender_name = possible_name if possible_name and "@" not in possible_name else sender_email
+
         def _fail(reason: str, dept="", emp="", date="") -> Dict:
             self.tracker.log_status(
-                preview, "FAILED", email_id, dept, emp, date,
-                reason=reason, processing_time=time.time() - t0
+                preview,
+                status="FAILED",
+                email_id=email_id,
+                department=dept,
+                employee_name=emp,
+                date=date,
+                reason=reason,
+                processing_time=time.time() - t0,
+                sender_email=sender_email,
+                sender_name=sender_name,
+                received_time=received_at,
             )
             logger.warning(f"FAILED [{email_id}]: {reason}")
             return {"status": "FAILED", "reason": reason}
@@ -78,9 +102,14 @@ class ReportProcessor:
         # ── 1. Duplicate check ────────────────
         if self.tracker.is_duplicate(email_hash):
             self.tracker.log_status(
-                preview, "DUPLICATE", email_id,
+                preview,
+                status="DUPLICATE",
+                email_id=email_id,
                 reason="Already processed within window",
                 processing_time=time.time() - t0,
+                sender_email=sender_email,
+                sender_name=sender_name,
+                received_time=received_at,
             )
             logger.info(f"DUPLICATE skipped: {subject!r}")
             return {"status": "DUPLICATE"}
@@ -94,7 +123,6 @@ class ReportProcessor:
             dept = email_data.get("department", "Unknown")
 
             # ── 3. Resolve department from sender if still Unknown ───────
-            sender_email = extract_email_address(from_header)
             if dept == "Unknown":
                 if sender_email in SALES_EMAIL_MAP:
                     dept = "Sales"
@@ -160,21 +188,11 @@ class ReportProcessor:
             email_data["date"] = date_str
 
             # ── 6. Sales midnight cutoff ──────────────────────────────────
-            # Only for Sales. Emails received at/after 00:00 are rejected.
+            # Only for Sales. Reject if the email was received in the midnight hour (00:00 - 00:59).
             if dept == "Sales":
-                cutoff_reached = (
-                    received_at.hour > SALES_CUTOFF_HOUR
-                    or (received_at.hour == SALES_CUTOFF_HOUR
-                        and received_at.minute >= SALES_CUTOFF_MINUTE)
-                ) and received_at.hour == 0   # Only reject if it's actually midnight hour
-
-                # Simpler: reject if hour is 0 (midnight) or beyond
-                # Active window is 2:30 PM – 11:59 PM
-                # Anything arriving at 00:00:00 or later = next-day = rejected
                 if received_at.hour == SALES_CUTOFF_HOUR and received_at.minute >= SALES_CUTOFF_MINUTE:
                     return _fail(
-                        f"Sales report received after midnight cutoff "
-                        f"({received_at.strftime('%H:%M')}). "
+                        f"Sales report received after midnight cutoff ({received_at.strftime('%H:%M')}). "
                         f"Deadline is 11:59 PM.",
                         dept=dept, emp=canonical_name, date=date_str,
                     )
@@ -220,12 +238,20 @@ class ReportProcessor:
 
             self.sheets.write_data(dept, date_str, row_num, email_data)
 
-            # ── 11. Mark processed + log ──────
+            # ── 11. Mark processed + log ─────
             self.tracker.mark_processed(email_hash)
             elapsed = time.time() - t0
             self.tracker.log_status(
-                preview, "SUCCESS", email_id, dept, canonical_name, date_str,
+                preview,
+                status="SUCCESS",
+                email_id=email_id,
+                department=dept,
+                employee_name=canonical_name,
+                date=date_str,
                 processing_time=elapsed,
+                sender_email=sender_email,
+                sender_name=sender_name,
+                received_time=received_at,
             )
             logger.info(
                 f"SUCCESS — {dept} / {canonical_name} / {date_str} "
@@ -250,7 +276,6 @@ class ReportProcessor:
     # ─────────────────────────────────────────
     # Batch runner
     # ─────────────────────────────────────────
-
     def run(self) -> List[Dict]:
         logger.info("═" * 60)
         logger.info("Report Processor started")
