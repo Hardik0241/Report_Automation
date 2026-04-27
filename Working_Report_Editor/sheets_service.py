@@ -1,13 +1,18 @@
+# File: Working_Report_Editor/sheets_service.py
 """
 sheets_service.py — All Google Sheets operations with Calibri font, size 13, center alignment.
 Works on BOTH GitHub Actions (env vars) AND Streamlit Cloud (st.secrets)
+
+Improvements:
+- Caches employee→row mapping per (department, date) to avoid repeated get_all_values calls.
+- Adds write_batch(...) to perform a single batch_update for multiple row updates (reduces API calls).
 """
 
 import logging
 import json
 import os
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import gspread
 from google.oauth2 import service_account
@@ -36,7 +41,6 @@ _SCOPES = [
 
 def _get_credentials():
     """Get credentials from: Streamlit secrets OR environment variable OR file"""
-    
     # Try 1: Load from Streamlit secrets (for Streamlit Cloud)
     try:
         import streamlit as st
@@ -49,7 +53,7 @@ def _get_credentials():
             )
     except Exception as e:
         logger.debug(f"Streamlit secrets not available: {e}")
-    
+
     # Try 2: Load from GOOGLE_CREDENTIALS environment variable (GitHub Actions)
     creds_json = os.environ.get("GOOGLE_CREDENTIALS", "")
     if creds_json:
@@ -63,7 +67,7 @@ def _get_credentials():
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse GOOGLE_CREDENTIALS JSON: {e}")
             raise
-    
+
     # Try 3: Load from credentials.json file (local testing)
     if os.path.exists("credentials.json"):
         logger.info("Loading credentials from credentials.json file")
@@ -71,7 +75,7 @@ def _get_credentials():
             "credentials.json",
             scopes=_SCOPES,
         )
-    
+
     raise Exception("No valid credentials found in Streamlit secrets, GOOGLE_CREDENTIALS env var, or credentials.json file")
 
 
@@ -87,6 +91,10 @@ class SheetsService:
         self._sales_ss = client.open_by_key(SALES_SPREADSHEET_ID)
         self._hr_ss = client.open_by_key(HR_SPREADSHEET_ID)
         logger.info("SheetsService: connected to Sales and HR spreadsheets.")
+        # In-memory cache: {(department, date_str): {employee_name: row_number, ...}}
+        self._emp_cache: Dict[Tuple[str, str], Dict[str, int]] = {}
+        # Cache worksheet objects to reduce lookups
+        self._ws_cache: Dict[Tuple[str, str], gspread.Worksheet] = {}
 
     def _spreadsheet(self, department: str):
         return self._sales_ss if department == "Sales" else self._hr_ss
@@ -121,22 +129,28 @@ class SheetsService:
                     "fields": "userEnteredFormat.textFormat,userEnteredFormat.horizontalAlignment,userEnteredFormat.verticalAlignment"
                 }
             }]
-            
+
             ws.spreadsheet.batch_update({"requests": requests})
             logger.info(f"Applied Calibri 13 center alignment to {ws.title}")
-            
+
         except Exception as exc:
             logger.warning(f"Could not apply formatting: {exc}")
 
     def _get_worksheet(self, department: str, date_str: str) -> gspread.Worksheet:
+        key = (department, date_str)
+        if key in self._ws_cache:
+            return self._ws_cache[key]
+
         ss = self._spreadsheet(department)
         name = self.sheet_name(date_str)
         try:
             ws = ss.worksheet(name)
             logger.debug(f"Using existing sheet '{name}' ({department})")
-            return ws
         except gspread.WorksheetNotFound:
-            return self._create_worksheet(ss, name, department)
+            ws = self._create_worksheet(ss, name, department)
+
+        self._ws_cache[key] = ws
+        return ws
 
     def _create_worksheet(
         self,
@@ -155,12 +169,12 @@ class SheetsService:
         )
 
         ws.update("A1", [headers])
-        
+
         name_cells = [[emp] for emp in employees]
         ws.update(f"B2:B{len(employees) + 1}", name_cells)
-        
+
         self._apply_formatting(ws)
-        
+
         logger.info(f"Sheet '{name}' created with {len(employees)} employee rows.")
         return ws
 
@@ -192,22 +206,38 @@ class SheetsService:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
             self._apply_formatting(ws)
             logger.info(f"Added date '{date_str}' for {len(updates)} employee(s) in {ws.title}")
+            # Invalidate cache for this sheet since we've changed rows
+            key = (department, date_str)
+            if key in self._emp_cache:
+                del self._emp_cache[key]
+
+    @with_retry()
+    def get_employees_for_date(
+        self, department: str, date_str: str
+    ) -> Dict[str, int]:
+        """Return a mapping employee_name -> row_number. Uses cache to avoid repeated API calls."""
+        key = (department, date_str)
+        if key in self._emp_cache:
+            return self._emp_cache[key]
+
+        ws = self._get_worksheet(department, date_str)
+        all_values = ws.get_all_values()
+        emp_rows = {}
+        for i, row in enumerate(all_values[1:], start=2):
+            row_date = row[0].strip() if len(row) > 0 else ""
+            row_name = row[1].strip() if len(row) > 1 else ""
+            if row_date == date_str and row_name:
+                emp_rows[row_name] = i
+
+        self._emp_cache[key] = emp_rows
+        return emp_rows
 
     @with_retry()
     def find_employee_row(
         self, department: str, date_str: str, employee_name: str
     ) -> Optional[int]:
-        ws = self._get_worksheet(department, date_str)
-        all_values = ws.get_all_values()
-
-        for i, row in enumerate(all_values[1:], start=2):
-            row_date = row[0].strip() if len(row) > 0 else ""
-            row_name = row[1].strip() if len(row) > 1 else ""
-            if row_date == date_str and row_name.lower() == employee_name.lower():
-                return i
-
-        logger.warning(f"Row not found: {employee_name} / {date_str}")
-        return None
+        emp_map = self.get_employees_for_date(department, date_str)
+        return emp_map.get(employee_name)
 
     @with_retry()
     def write_data(
@@ -217,51 +247,93 @@ class SheetsService:
         row_number: int,
         data: Dict,
     ) -> None:
+        """Legacy single-row write (kept for compatibility). Internally calls write_batch with a single update."""
+        self.write_batch(department, date_str, [(row_number, data)])
+
+    @with_retry()
+    def write_batch(
+        self,
+        department: str,
+        date_str: str,
+        updates: List[Tuple[int, Dict]],
+    ) -> None:
+        """
+        Batch-write multiple rows in one API call.
+
+        updates: list of tuples (row_number, data_dict)
+        data_dict uses the same fields as in write_data: field names mapped by SALES_COLUMN_MAPPING or HR_COLUMN_MAPPING.
+        """
+        if not updates:
+            logger.warning("write_batch: no updates provided.")
+            return
+
         ws = self._get_worksheet(department, date_str)
         mapping = SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
 
-        cell_updates: Dict[int, object] = {}
-        for field, col in mapping.items():
-            if field in ("Date", "Employee Name"):
+        # Prepare batch update payload
+        batch_requests: List[Dict] = []
+
+        for row_number, data in updates:
+            cell_updates: Dict[int, object] = {}
+            for field, col in mapping.items():
+                if field in ("Date", "Employee Name"):
+                    continue
+
+                if field in data:
+                    val = data[field]
+                else:
+                    if field == "Duration":
+                        val = "00:00:00"
+                    elif field in (
+                        "Ref Added", "status Viewed", "Document Collected",
+                        "Total Calls", "Connected Calls",
+                        "Total Dialed", "Total Connected",
+                        "Interview Held", "Tomorrow Interview Lineups", "Prospect",
+                    ):
+                        val = 0
+                    else:
+                        val = ""
+
+                cell_updates[col] = val
+
+            if not cell_updates:
                 continue
 
-            if field in data:
-                val = data[field]
-            else:
-                if field == "Duration":
-                    val = "00:00:00"
-                elif field in (
-                    "Ref Added", "status Viewed", "Document Collected",
-                    "Total Calls", "Connected Calls",
-                    "Total Dialed", "Total Connected",
-                    "Interview Held", "Tomorrow Interview Lineups", "Prospect",
-                ):
-                    val = 0
-                else:
-                    val = ""
+            cols_sorted = sorted(cell_updates)
+            min_col = cols_sorted[0]
+            max_col = cols_sorted[-1]
 
-            cell_updates[col] = val
+            row_values = [""] * (max_col - min_col + 1)
+            for col, val in cell_updates.items():
+                row_values[col - min_col] = val
 
-        if not cell_updates:
-            logger.warning("write_data: no fields to update.")
+            col_start = gspread.utils.rowcol_to_a1(row_number, min_col).rstrip("0123456789")
+            col_end = gspread.utils.rowcol_to_a1(row_number, max_col).rstrip("0123456789")
+            range_str = f"{col_start}{row_number}:{col_end}{row_number}"
+
+            batch_requests.append({
+                "range": range_str,
+                "values": [row_values],
+            })
+
+        if not batch_requests:
+            logger.warning("write_batch: no cell updates constructed.")
             return
 
-        cols_sorted = sorted(cell_updates)
-        min_col = cols_sorted[0]
-        max_col = cols_sorted[-1]
-
-        row_values = [""] * (max_col - min_col + 1)
-        for col, val in cell_updates.items():
-            row_values[col - min_col] = val
-
-        col_start = gspread.utils.rowcol_to_a1(row_number, min_col).rstrip("0123456789")
-        col_end = gspread.utils.rowcol_to_a1(row_number, max_col).rstrip("0123456789")
-        range_str = f"{col_start}{row_number}:{col_end}{row_number}"
-
-        ws.update(range_str, [row_values], value_input_option="USER_ENTERED")
-        self._apply_formatting(ws)
-
-        logger.info(f"Written {department} data for {data.get('employee_name')} on {date_str}")
+        # Perform a single batch_update for all rows
+        try:
+            ws.batch_update(batch_requests, value_input_option="USER_ENTERED")
+            self._apply_formatting(ws)
+            logger.info(f"Batch wrote {len(batch_requests)} row(s) to {ws.title}")
+            # Invalidate cache for affected sheet since we updated values
+            key = (department, date_str)
+            if key in self._emp_cache:
+                # The employee->row mapping hasn't changed, so we don't strictly need to delete the cache,
+                # but values changed; keep mapping but it's fine to leave. If structure changed, caller should clear.
+                pass
+        except Exception as exc:
+            logger.error(f"write_batch failed: {exc}")
+            raise
 
     @with_retry()
     def mark_not_sent(self, department: str, date_str: str) -> None:
@@ -320,16 +392,3 @@ class SheetsService:
 
     def list_sheets(self, department: str) -> List[str]:
         return [ws.title for ws in self._spreadsheet(department).worksheets()]
-
-    def get_employees_for_date(
-        self, department: str, date_str: str
-    ) -> Dict[str, int]:
-        ws = self._get_worksheet(department, date_str)
-        all_values = ws.get_all_values()
-        emp_rows = {}
-        for i, row in enumerate(all_values[1:], start=2):
-            row_date = row[0].strip() if len(row) > 0 else ""
-            row_name = row[1].strip() if len(row) > 1 else ""
-            if row_date == date_str and row_name:
-                emp_rows[row_name] = i
-        return emp_rows
