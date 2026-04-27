@@ -38,20 +38,21 @@ st.markdown("""
         padding: 15px;
         border: 1px solid #334155;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        transition: transform 0.2s, box-shadow 0.2s;
+        transition: all 0.3s ease;
     }
     div[data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+        transform: translateY(-3px);
         border-color: #3b82f6;
+        box-shadow: 0 8px 20px rgba(59,130,246,0.15);
     }
     div[data-testid="stMetric"] label {
         color: #94a3b8 !important;
-        font-size: 0.85rem !important;
+        font-size: 0.8rem !important;
         font-weight: 500 !important;
+        letter-spacing: 0.5px;
     }
     div[data-testid="stMetric"] .stMetricValue {
-        color: #f1f5f9 !important;
+        color: #ffffff !important;
         font-size: 2rem !important;
         font-weight: 700 !important;
     }
@@ -59,16 +60,16 @@ st.markdown("""
     /* Header styling */
     .dashboard-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        padding: 2rem;
+        padding: 1.5rem 2rem;
         border-radius: 16px;
         margin-bottom: 2rem;
         border: 1px solid #334155;
         box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
     .dashboard-title {
-        font-size: 2rem;
+        font-size: 1.8rem;
         font-weight: 700;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.3rem;
         display: flex;
         align-items: center;
         gap: 12px;
@@ -79,7 +80,17 @@ st.markdown("""
         color: #94a3b8;
     }
     
-    /* Sidebar styling */
+    /* Section Headers */
+    .section-header {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin: 1.5rem 0 1rem 0;
+        padding-left: 0.8rem;
+        border-left: 4px solid #3b82f6;
+    }
+    
+    /* Sidebar */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
         border-right: 1px solid #334155;
@@ -90,45 +101,18 @@ st.markdown("""
     [data-testid="stSidebar"] .stMarkdown {
         color: #94a3b8 !important;
     }
-    [data-testid="stSidebar"] .stMetric label {
-        color: #64748b !important;
-    }
-    
-    /* Section headers */
-    .section-header {
-        font-size: 1.3rem;
-        font-weight: 600;
-        margin: 1.5rem 0 1rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 3px solid #3b82f6;
-        display: inline-block;
-        color: #f1f5f9;
-    }
-    
-    /* Info box styling */
-    .stAlert {
-        background-color: #1e293b !important;
-        border: 1px solid #334155 !important;
-        color: #cbd5e1 !important;
-    }
-    
-    /* Data table styling */
-    [data-testid="stDataFrame"] {
-        background-color: #1e293b !important;
-        border-radius: 12px;
-        overflow: hidden;
-        border: 1px solid #334155;
-    }
-    [data-testid="stDataFrame"] table {
+    [data-testid="stSidebar"] .stMarkdown h3 {
         color: #e2e8f0 !important;
-    }
-    [data-testid="stDataFrame"] th {
-        background-color: #0f172a !important;
-        color: #94a3b8 !important;
+        font-size: 0.9rem !important;
         font-weight: 600 !important;
     }
-    [data-testid="stDataFrame"] td {
-        color: #cbd5e1 !important;
+    
+    /* Info Box */
+    .stAlert {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid #334155;
+        border-radius: 12px;
+        color: #94a3b8 !important;
     }
     
     /* Success message */
@@ -138,19 +122,25 @@ st.markdown("""
         color: #bbf7d0 !important;
     }
     
-    /* Expander styling */
-    .streamlit-expanderHeader {
-        background-color: #1e293b !important;
-        border: 1px solid #334155 !important;
-        border-radius: 8px !important;
-        color: #e2e8f0 !important;
+    /* Data Table */
+    [data-testid="stDataFrame"] {
+        background: #13161c;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #2a2e38;
     }
-    .streamlit-expanderContent {
-        background-color: #0f172a !important;
-        border-radius: 8px !important;
+    [data-testid="stDataFrame"] th {
+        background: #1a1d24 !important;
+        color: #94a3b8 !important;
+        font-size: 0.75rem !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stDataFrame"] td {
+        color: #cbd5e1 !important;
+        font-size: 0.8rem !important;
     }
     
-    /* Button styling */
+    /* Button */
     .stButton button {
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white !important;
@@ -161,25 +151,22 @@ st.markdown("""
     }
     .stButton button:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(59,130,246,0.4);
+        box-shadow: 0 4px 12px rgba(59,130,246,0.3);
     }
     
-    /* Download button */
-    .stDownloadButton button {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: #1e293b !important;
+        border: 1px solid #334155 !important;
+        border-radius: 8px !important;
+        color: #e2e8f0 !important;
+    }
+    .streamlit-expanderContent {
+        background: #0f172a !important;
+        border-radius: 8px !important;
     }
     
-    /* Footer */
-    .footer {
-        text-align: center;
-        padding: 1.5rem;
-        margin-top: 2rem;
-        border-top: 1px solid #334155;
-        font-size: 0.75rem;
-        color: #64748b;
-    }
-    
-    /* Selectbox styling */
+    /* Selectbox */
     .stSelectbox label, .stMultiSelect label {
         color: #94a3b8 !important;
     }
@@ -199,13 +186,20 @@ st.markdown("""
         border-color: #334155 !important;
     }
     
-    /* Caption */
-    .stCaption {
-        color: #64748b !important;
-    }
-    
+    /* Divider */
     hr {
         border-color: #334155 !important;
+        margin: 1rem 0 !important;
+    }
+    
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 1.5rem;
+        margin-top: 2rem;
+        border-top: 1px solid #334155;
+        font-size: 0.7rem;
+        color: #64748b;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -215,7 +209,7 @@ st.markdown("""
 # ────────────────────────────────────────────────────────────────────
 @st.cache_data(ttl=60)
 def load_logs() -> pd.DataFrame:
-    """Load and cache processing logs with all details"""
+    """Load and cache processing logs"""
     path = "logs/processing_logs.csv"
     expected_cols = [
         "Timestamp", "Email_ID", "Email_Subject", "Sender_Email",
@@ -236,24 +230,21 @@ def load_logs() -> pd.DataFrame:
         df["Received_Time"] = pd.to_datetime(df["Received_Time"], errors="coerce")
     return df
 
-def get_realtime_stats(df: pd.DataFrame) -> dict:
-    """Calculate real-time statistics with safe defaults"""
+def get_stats(df: pd.DataFrame) -> dict:
+    """Get main statistics"""
     if df.empty:
-        return {
-            "total": 0, "success": 0, "failed": 0, "duplicate": 0,
-            "rate": 0, "today_success": 0
-        }
-
+        return {"total": 0, "success": 0, "failed": 0, "duplicate": 0, "rate": 0, "today_success": 0}
+    
     total = len(df)
     success = len(df[df["Status"] == "SUCCESS"])
     failed = len(df[df["Status"] == "FAILED"])
     duplicate = len(df[df["Status"] == "DUPLICATE"])
     rate = (success / total * 100) if total > 0 else 0
-
+    
     today = datetime.now().date()
     today_df = df[df["Timestamp"].dt.date == today] if not df.empty else pd.DataFrame()
     today_success = len(today_df[today_df["Status"] == "SUCCESS"]) if not today_df.empty else 0
-
+    
     return {
         "total": total,
         "success": success,
@@ -264,7 +255,7 @@ def get_realtime_stats(df: pd.DataFrame) -> dict:
     }
 
 # ────────────────────────────────────────────────────────────────────
-# SIDEBAR - STATUS & INFO
+# SIDEBAR
 # ────────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚙️ System Status")
@@ -290,19 +281,17 @@ with st.sidebar:
     
     st.markdown("---")
     
-    st.markdown("### 🔄 Dashboard Controls")
+    st.markdown("### Dashboard Page")
     if st.button("🔄 Refresh Data", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-    
-    auto_refresh = st.checkbox("Auto-refresh (30s)", value=False)
     
     st.markdown("---")
     st.caption("📊 Advanced Report Automation System")
     st.caption("Powered by Google Gemini AI")
 
 # ────────────────────────────────────────────────────────────────────
-# MAIN DASHBOARD HEADER
+# MAIN HEADER
 # ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="dashboard-header">
@@ -317,164 +306,148 @@ st.markdown("""
 
 # Load data
 df = load_logs()
-stats = get_realtime_stats(df)
+stats = get_stats(df)
 
 # ────────────────────────────────────────────────────────────────────
-# KPI CARDS - MODERN METRICS
+# KPI CARDS
 # ────────────────────────────────────────────────────────────────────
-col1, col2, col3, col4, col5 = st.columns(5)
+c1, c2, c3, c4, c5 = st.columns(5)
 
-with col1:
+with c1:
     st.metric("📧 Total Processed", stats["total"])
-with col2:
+with c2:
     st.metric("✅ Success", stats["success"])
-with col3:
+with c3:
     st.metric("❌ Failed", stats["failed"])
-with col4:
+with c4:
     st.metric("🔄 Duplicate", stats["duplicate"])
-with col5:
+with c5:
     st.metric("📈 Today's Success", stats["today_success"])
 
 st.markdown("---")
 
-# If no data, show empty state
+# Empty state
 if df.empty:
-    st.info("""
-    ### 📭 No Data Available
-    
-    The system is waiting for reports to be submitted. 
-    - Reports are processed automatically via GitHub Actions
-    - First run will populate data here
-    - Check back after 2:30 PM for today's reports
-    """)
+    st.info("📭 No data available. Reports will appear here once processed via GitHub Actions.")
     st.stop()
 
 # ────────────────────────────────────────────────────────────────────
-# SECTION 1: RECENT ACTIVITY - WHO SENT WHAT AT WHAT TIME
+# SECTION 1: RECENT ACTIVITY
 # ────────────────────────────────────────────────────────────────────
 st.markdown('<div class="section-header">📨 Recent Reports (Sender & Time)</div>', unsafe_allow_html=True)
 
-recent_success = df[df["Status"] == "SUCCESS"].sort_values("Received_Time", ascending=False).head(15)
+recent = df[df["Status"] == "SUCCESS"].sort_values("Received_Time", ascending=False).head(15)
 
-if not recent_success.empty:
-    recent_display = recent_success[["Received_Time", "Sender_Name", "Employee_Name", "Department", "Date", "Processing_Time_Sec"]].copy()
-    recent_display.columns = ["📅 Received At", "👤 Sender", "👥 Employee", "🏢 Dept", "📆 Report Date", "⏱️ Process Time"]
-    recent_display["📅 Received At"] = recent_display["📅 Received At"].dt.strftime("%d-%b-%Y %I:%M:%S %p")
-    st.dataframe(recent_display, use_container_width=True, hide_index=True)
+if not recent.empty:
+    display = recent[["Received_Time", "Sender_Name", "Employee_Name", "Department", "Date"]].copy()
+    display.columns = ["📅 Received Time", "👤 Sender", "👥 Employee", "🏢 Dept", "📆 Report Date"]
+    display["📅 Received Time"] = display["📅 Received Time"].dt.strftime("%d-%b-%Y %I:%M:%S %p")
+    
+    st.dataframe(display, use_container_width=True, hide_index=True)
 else:
-    st.info("No successful reports yet.")
+    st.info("No recent submissions.")
 
 st.markdown("---")
 
 # ────────────────────────────────────────────────────────────────────
-# SECTION 2: TREND ANALYSIS
+# SECTION 2: TREND & INSIGHTS
 # ────────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">📈 Processing Trend Analysis</div>', unsafe_allow_html=True)
+col_a, col_b = st.columns(2)
 
-if "Timestamp" in df.columns and not df["Timestamp"].isna().all():
-    trend_df = (
+with col_a:
+    st.markdown('<div class="section-header">📈 Daily Trend</div>', unsafe_allow_html=True)
+    
+    trend = (
         df.dropna(subset=["Timestamp"])
         .assign(Date=lambda d: d["Timestamp"].dt.date)
         .groupby(["Date", "Status"])
         .size()
         .reset_index(name="Count")
     )
-
-    if not trend_df.empty:
-        fig = px.line(
-            trend_df,
+    
+    if not trend.empty:
+        fig = px.bar(
+            trend,
             x="Date",
             y="Count",
             color="Status",
             color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444", "DUPLICATE": "#f59e0b"},
-            markers=True,
-            line_shape="spline"
+            text="Count"
         )
         fig.update_layout(
-            title="Daily Processing Volume",
-            title_x=0.5,
-            title_font_color="#f1f5f9",
-            margin=dict(t=50, b=20, l=20, r=20),
-            height=350,
-            hovermode="x unified",
-            plot_bgcolor="#0f172a",
-            paper_bgcolor="#0f172a",
-            font_color="#e2e8f0"
-        )
-        fig.update_xaxes(gridcolor="#334155", tickcolor="#334155")
-        fig.update_yaxes(gridcolor="#334155", tickcolor="#334155")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Not enough data for trend analysis yet.")
-
-# ────────────────────────────────────────────────────────────────────
-# SECTION 3: DEPARTMENT & EMPLOYEE INSIGHTS
-# ────────────────────────────────────────────────────────────────────
-col_left, col_right = st.columns(2, gap="large")
-
-with col_left:
-    st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
-    dept_df = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
-    if not dept_df.empty:
-        dept_df.columns = ["Department", "Count"]
-        
-        fig2 = px.pie(
-            dept_df,
-            names="Department",
-            values="Count",
-            color="Department",
-            color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"},
-            hole=0.4,
-        )
-        fig2.update_layout(
             height=320,
             margin=dict(t=20, b=20, l=20, r=20),
-            showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-            plot_bgcolor="#0f172a",
-            paper_bgcolor="#0f172a",
-            font_color="#e2e8f0"
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+            legend=dict(orientation="h", yanchor="top", y=-0.1),
         )
-        fig2.update_traces(textposition="inside", textinfo="percent+label")
-        st.plotly_chart(fig2, use_container_width=True)
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("No department data available.")
+        st.info("Not enough data for trend analysis.")
 
-with col_right:
-    st.markdown('<div class="section-header">🏆 Top Performing Employees</div>', unsafe_allow_html=True)
-    emp_df = (
+with col_b:
+    st.markdown('<div class="section-header">🏆 Top Contributors</div>', unsafe_allow_html=True)
+    
+    top_emp = (
         df[df["Status"] == "SUCCESS"]["Employee_Name"]
         .value_counts()
         .head(8)
         .reset_index()
     )
-    if not emp_df.empty:
-        emp_df.columns = ["Employee", "Reports"]
-        
-        fig3 = px.bar(
-            emp_df,
+    top_emp.columns = ["Employee", "Reports"]
+    
+    if not top_emp.empty:
+        fig = px.bar(
+            top_emp,
             x="Reports",
             y="Employee",
             orientation="h",
             color="Reports",
-            color_continuous_scale="greens",
+            color_continuous_scale="blues",
             text="Reports"
         )
-        fig3.update_layout(
+        fig.update_layout(
             height=320,
             margin=dict(t=20, b=20, l=20, r=20),
-            xaxis_title="Successful Reports",
+            xaxis_title="",
             yaxis_title="",
             coloraxis_showscale=False,
-            plot_bgcolor="#0f172a",
-            paper_bgcolor="#0f172a",
-            font_color="#e2e8f0"
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
         )
-        fig3.update_xaxes(gridcolor="#334155")
-        fig3.update_traces(textposition="outside", textfont_color="#e2e8f0")
-        st.plotly_chart(fig3, use_container_width=True)
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("No employee data available yet.")
+        st.info("No employee data available.")
+
+# ────────────────────────────────────────────────────────────────────
+# SECTION 3: DEPARTMENT PERFORMANCE
+# ────────────────────────────────────────────────────────────────────
+st.markdown('<div class="section-header">🏢 Department Performance</div>', unsafe_allow_html=True)
+
+dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
+if not dept_data.empty:
+    dept_data.columns = ["Department", "Count"]
+    
+    fig = px.pie(
+        dept_data,
+        names="Department",
+        values="Count",
+        color="Department",
+        color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"},
+        hole=0.4,
+    )
+    fig.update_layout(
+        height=300,
+        margin=dict(t=10, b=10, l=10, r=10),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.1),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    fig.update_traces(textposition="inside", textinfo="percent+label")
+    st.plotly_chart(fig, use_container_width=True)
 
 # ────────────────────────────────────────────────────────────────────
 # SECTION 4: HOURLY SUBMISSION PATTERN
@@ -497,15 +470,15 @@ if "Received_Time" in df.columns and not df["Received_Time"].isna().all():
             text="Count"
         )
         fig_hourly.update_layout(
-            title="Reports Submitted by Hour of Day",
+            title="Reports Submitted by Hour",
             title_x=0.5,
             title_font_color="#f1f5f9",
-            height=300,
+            height=320,
             margin=dict(t=50, b=20, l=20, r=20),
             xaxis_title="Hour of Day (24h format)",
             yaxis_title="Number of Reports",
-            plot_bgcolor="#0f172a",
-            paper_bgcolor="#0f172a",
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
             font_color="#e2e8f0"
         )
         fig_hourly.update_xaxes(gridcolor="#334155", tickmode="linear", tick0=0, dtick=2)
@@ -525,41 +498,33 @@ if not fail_df.empty:
     col_f1, col_f2 = st.columns([2, 1])
 
     with col_f1:
-        reason_counts = (
-            fail_df["Reason"].astype(str).str[:80]
-            .value_counts()
-            .head(8)
-            .reset_index()
+        errors = fail_df["Reason"].str[:80].value_counts().head(8).reset_index()
+        errors.columns = ["Error", "Count"]
+        
+        fig = px.bar(
+            errors,
+            x="Count",
+            y="Error",
+            orientation="h",
+            color="Count",
+            color_continuous_scale="reds",
+            text="Count"
         )
-        if not reason_counts.empty:
-            reason_counts.columns = ["Reason", "Count"]
-            
-            fig4 = px.bar(
-                reason_counts,
-                x="Count",
-                y="Reason",
-                orientation="h",
-                color="Count",
-                color_continuous_scale="reds",
-                text="Count"
-            )
-            fig4.update_layout(
-                height=300,
-                margin=dict(t=20, b=20, l=20, r=20),
-                xaxis_title="Occurrences",
-                yaxis_title="",
-                coloraxis_showscale=False,
-                plot_bgcolor="#0f172a",
-                paper_bgcolor="#0f172a",
-                font_color="#e2e8f0"
-            )
-            fig4.update_xaxes(gridcolor="#334155")
-            fig4.update_traces(textposition="outside", textfont_color="#e2e8f0")
-            st.plotly_chart(fig4, use_container_width=True)
+        fig.update_layout(
+            height=280,
+            margin=dict(t=20, b=20, l=20, r=20),
+            xaxis_title="Occurrences",
+            yaxis_title="",
+            coloraxis_showscale=False,
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
 
     with col_f2:
         st.metric("Total Failures", len(fail_df))
-        st.metric("Unique Error Types", len(reason_counts))
+        st.metric("Unique Errors", len(errors))
         
         with st.expander("📋 Recent Failures"):
             st.dataframe(
@@ -570,53 +535,33 @@ if not fail_df.empty:
                 hide_index=True
             )
 else:
-    st.success("""
-    ### ✅ No Failures Recorded
-    
-    All recent reports have been processed successfully!
-    """)
+    st.success("✅ No failures recorded. All reports processed successfully!")
 
 # ────────────────────────────────────────────────────────────────────
-# SECTION 6: DETAILED AUDIT LOG WITH FILTERS
+# SECTION 6: AUDIT LOG
 # ────────────────────────────────────────────────────────────────────
-st.markdown('<div class="section-header">📋 Complete Audit Log</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-header">📋 Audit Log</div>', unsafe_allow_html=True)
 
-# Filter row
-col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
+# Filters
+f1, f2, f3, f4 = st.columns(4)
 
-with col_f1:
-    status_filter = st.multiselect(
-        "Status",
-        ["SUCCESS", "FAILED", "DUPLICATE"],
-        default=["SUCCESS", "FAILED", "DUPLICATE"],
-        key="status_filter"
-    )
-
-with col_f2:
-    dept_options = ["All"] + sorted(df["Department"].dropna().unique().tolist())
-    dept_filter = st.selectbox("Department", dept_options, key="dept_filter")
-
-with col_f3:
-    emp_options = ["All"] + sorted(df["Employee_Name"].dropna().unique().tolist())
-    emp_filter = st.selectbox("Employee", emp_options, key="emp_filter")
-
-with col_f4:
-    sender_options = ["All"] + sorted(df["Sender_Name"].dropna().unique().tolist())
-    sender_filter = st.selectbox("Sender", sender_options, key="sender_filter")
-
-with col_f5:
-    date_range = st.date_input("Date Range", value=(), key="date_range")
+with f1:
+    status_f = st.multiselect("Status", ["SUCCESS", "FAILED", "DUPLICATE"], default=["SUCCESS", "FAILED", "DUPLICATE"])
+with f2:
+    dept_f = st.selectbox("Department", ["All"] + sorted(df["Department"].dropna().unique().tolist()))
+with f3:
+    emp_f = st.selectbox("Employee", ["All"] + sorted(df["Employee_Name"].dropna().unique().tolist()))
+with f4:
+    date_range = st.date_input("Date Range", value=())
 
 # Apply filters
 filtered = df.copy()
-if status_filter:
-    filtered = filtered[filtered["Status"].isin(status_filter)]
-if dept_filter and dept_filter != "All":
-    filtered = filtered[filtered["Department"] == dept_filter]
-if emp_filter and emp_filter != "All":
-    filtered = filtered[filtered["Employee_Name"] == emp_filter]
-if sender_filter and sender_filter != "All":
-    filtered = filtered[filtered["Sender_Name"] == sender_filter]
+if status_f:
+    filtered = filtered[filtered["Status"].isin(status_f)]
+if dept_f and dept_f != "All":
+    filtered = filtered[filtered["Department"] == dept_f]
+if emp_f and emp_f != "All":
+    filtered = filtered[filtered["Employee_Name"] == emp_f]
 if len(date_range) == 2:
     start, end = date_range
     filtered = filtered[
@@ -624,59 +569,24 @@ if len(date_range) == 2:
         (filtered["Received_Time"].dt.date <= end)
     ]
 
-st.caption(f"Showing {len(filtered)} of {len(df)} entries")
+st.caption(f"📋 Showing {len(filtered)} of {len(df)} entries")
 
 if not filtered.empty:
-    display_df = filtered[[
+    log_display = filtered[[
         "Received_Time", "Sender_Name", "Employee_Name", "Department",
-        "Date", "Status", "Email_Subject", "Processing_Time_Sec", "Reason"
+        "Date", "Status", "Processing_Time_Sec"
     ]].copy()
-
-    display_df.columns = [
-        "📅 Received Time", "📧 Sender", "👥 Employee", "🏢 Dept",
-        "📆 Report Date", "✅ Status", "📝 Subject", "⏱️ Time (s)", "❌ Reason"
-    ]
-
-    display_df["📅 Received Time"] = display_df["📅 Received Time"].dt.strftime("%d-%b-%Y %I:%M:%S %p")
-
-    st.dataframe(
-        display_df.sort_values("📅 Received Time", ascending=False),
-        use_container_width=True,
-        height=450,
-        hide_index=True,
-        column_config={
-            "✅ Status": st.column_config.TextColumn("Status", width="small"),
-            "⏱️ Time (s)": st.column_config.NumberColumn("Time (s)", format="%.2f"),
-        }
-    )
-else:
-    st.info("No matching records found.")
-
-# Export button
-if not filtered.empty:
-    csv_data = filtered.to_csv(index=False).encode()
-    st.download_button(
-        "📥 Export to CSV",
-        csv_data,
-        f"audit_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-        "text/csv",
-        use_container_width=True
-    )
+    log_display.columns = ["Time", "Sender", "Employee", "Dept", "Report Date", "Status", "Time(s)"]
+    log_display["Time"] = log_display["Time"].dt.strftime("%d-%b %H:%M:%S")
+    
+    st.dataframe(log_display.sort_values("Time", ascending=False), use_container_width=True, hide_index=True)
 
 # ────────────────────────────────────────────────────────────────────
 # FOOTER
 # ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="footer">
-    <strong>Advanced Report Automation System</strong> | Powered by Gemini AI | Google Sheets Integration<br>
-    Automated processing via GitHub Actions | Emails remain unread | Data written in Calibri 13pt Center
+    <span>⚡ Advanced Report Automation System · Powered by Gemini AI · Real-time Processing</span><br>
+    <span>Automated via GitHub Actions · Emails remain unread · Calibri 13pt Center formatting</span>
 </div>
 """, unsafe_allow_html=True)
-
-# ────────────────────────────────────────────────────────────────────
-# AUTO-REFRESH (Optional - disabled by default)
-# ────────────────────────────────────────────────────────────────────
-if auto_refresh:
-    time.sleep(30)
-    st.cache_data.clear()
-    st.rerun()
