@@ -1,6 +1,8 @@
+# File: Working_Report_Editor/tracker.py
 """
 tracker.py — Email processing tracker.
 Writes structured CSV logs and detects duplicate emails within a time window.
+Also stores sender email/name and received timestamp for dashboard audit.
 """
 
 import csv
@@ -23,6 +25,9 @@ _CSV_COLUMNS = [
     "Timestamp",
     "Email_ID",
     "Email_Subject",
+    "Sender_Email",
+    "Sender_Name",
+    "Received_Time",          # ISO datetime string
     "Status",           # SUCCESS | FAILED | DUPLICATE | SKIPPED
     "Department",
     "Employee_Name",
@@ -58,11 +63,23 @@ class Tracker:
         date:               str = "",
         reason:             str = "",
         processing_time:    float = 0.0,
+        sender_email:       str = "",
+        sender_name:        str = "",
+        received_time:      Optional[datetime] = None,
     ) -> None:
+        """
+        Write a structured row to processing_logs.csv.
+
+        received_time: datetime object; will be stored as ISO string, or empty if None.
+        """
+        received_iso = received_time.isoformat() if received_time is not None else ""
         row = [
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             email_id,
             (email_preview or "")[:120],
+            sender_email,
+            sender_name,
+            received_iso,
             status,
             department,
             employee_name,
