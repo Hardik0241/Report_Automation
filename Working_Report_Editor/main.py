@@ -3,16 +3,14 @@
 main.py — Production pipeline orchestrator.
 
 Key changes:
-  1. Sales dept uses email RECEIVED DATE (not subject date)
-  2. Name resolved from sender email map if body has no name
-  3. Sales emails received at/after midnight (00:00) are REJECTED
-  4. HR has no deadline — all rules unchanged
+  - Buffer sheet writes in self._write_buffer and flush as batched writes at end of run.
+  - This reduces Sheets API calls and allows updating all employees quickly.
 """
 
 import logging
 import time
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from config import (
     HR_EMAIL_MAP, HR_EMPLOYEES,
@@ -51,6 +49,8 @@ class ReportProcessor:
         self.sheets    = SheetsService()
         self.tracker   = Tracker()
         self.validator = DataValidator()
+        # Buffer: {(dept, date_str): [(row_num, data_dict), ...]}
+        self._write_buffer: Dict[Tuple[str, str], List[Tuple[int, Dict]]] = {}
 
     # ─────────────────────────────────────────
     # Per-email pipeline
@@ -78,7 +78,6 @@ class ReportProcessor:
             except Exception:
                 sender_name = sender_email
         else:
-            # If header contains a name-like part, use it; else use email
             possible_name = from_header.split("<")[0].strip().strip('"').strip()
             sender_name = possible_name if possible_name and "@" not in possible_name else sender_email
 
@@ -139,16 +138,13 @@ class ReportProcessor:
             employees = SALES_EMPLOYEES if dept == "Sales" else HR_EMPLOYEES
 
             # ── 4. Resolve employee name ──────────────────────────────────
-            # Priority: body name → sender email map → fail
             body_name = email_data.get("employee_name", "").strip()
 
             if body_name:
-                # Validate name found in body
                 ok, canonical_name, name_reason = self.validator.validate_employee_name(
                     body_name, dept
                 )
                 if not ok:
-                    # Body name didn't match — try email map as fallback
                     email_map = SALES_EMAIL_MAP if dept == "Sales" else HR_EMAIL_MAP
                     canonical_name = email_map.get(sender_email, "")
                     if not canonical_name:
@@ -158,7 +154,6 @@ class ReportProcessor:
                         )
                     logger.info(f"Name from body failed; used email map: {canonical_name}")
             else:
-                # No name in body — use sender email map
                 email_map = SALES_EMAIL_MAP if dept == "Sales" else HR_EMAIL_MAP
                 canonical_name = email_map.get(sender_email, "")
                 if not canonical_name:
@@ -172,13 +167,10 @@ class ReportProcessor:
             email_data["employee_name"] = canonical_name
 
             # ── 5. Determine date ─────────────────────────────────────────
-            # Sales: always use the email received date
-            # HR:    try subject first, fall back to received date
             if dept == "Sales":
                 date_str = received_timestamp_to_date(received_ms) if received_ms \
                            else received_at.strftime("%d-%m-%Y")
                 logger.info(f"Sales email — using received date: {date_str}")
-
             else:  # HR
                 date_str = extract_date_from_subject(subject)
                 if not date_str:
@@ -188,12 +180,10 @@ class ReportProcessor:
             email_data["date"] = date_str
 
             # ── 6. Sales midnight cutoff ──────────────────────────────────
-            # Only for Sales. Reject if the email was received in the midnight hour (00:00 - 00:59).
             if dept == "Sales":
                 if received_at.hour == SALES_CUTOFF_HOUR and received_at.minute >= SALES_CUTOFF_MINUTE:
                     return _fail(
-                        f"Sales report received after midnight cutoff ({received_at.strftime('%H:%M')}). "
-                        f"Deadline is 11:59 PM.",
+                        f"Sales report received after midnight cutoff ({received_at.strftime('%H:%M')}). Deadline is 11:59 PM.",
                         dept=dept, emp=canonical_name, date=date_str,
                     )
 
@@ -226,9 +216,11 @@ class ReportProcessor:
             if not ok:
                 return _fail(match_reason, dept=dept, emp=canonical_name, date=date_str)
 
-            # ── 10. Sheet update ──────────────
+            # ── 10. Ensure sheet rows exist ──────────────
+            # call ensure_date_for_all_employees once per dept/date (it is idempotent)
             self.sheets.ensure_date_for_all_employees(dept, date_str)
 
+            # Find the employee row (cached by SheetsService where possible)
             row_num = self.sheets.find_employee_row(dept, date_str, canonical_name)
             if not row_num:
                 return _fail(
@@ -236,7 +228,9 @@ class ReportProcessor:
                     dept=dept, emp=canonical_name, date=date_str,
                 )
 
-            self.sheets.write_data(dept, date_str, row_num, email_data)
+            # ── Buffer the write (do not perform single-row update now)
+            key = (dept, date_str)
+            self._write_buffer.setdefault(key, []).append((row_num, email_data))
 
             # ── 11. Mark processed + log ─────
             self.tracker.mark_processed(email_hash)
@@ -254,8 +248,7 @@ class ReportProcessor:
                 received_time=received_at,
             )
             logger.info(
-                f"SUCCESS — {dept} / {canonical_name} / {date_str} "
-                f"(row {row_num}) [{elapsed:.1f}s]"
+                f"SUCCESS — {dept} / {canonical_name} / {date_str} (row {row_num}) [{elapsed:.1f}s]"
             )
             return {
                 "status":     "SUCCESS",
@@ -276,6 +269,36 @@ class ReportProcessor:
     # ─────────────────────────────────────────
     # Batch runner
     # ─────────────────────────────────────────
+    def _flush_writes(self) -> None:
+        """Flush buffered writes to Google Sheets using batch_update per (dept,date)."""
+        if not self._write_buffer:
+            logger.info("No buffered writes to flush.")
+            return
+
+        for (dept, date_str), entries in self._write_buffer.items():
+            try:
+                logger.info(f"Flushing {len(entries)} write(s) for {dept} / {date_str}")
+                # entries is list of (row_num, data_dict)
+                self.sheets.write_batch(dept, date_str, entries)
+            except Exception as exc:
+                logger.error(f"Failed to flush writes for {dept}/{date_str}: {exc}")
+                # If flush fails, log individual failures in processing log for traceability
+                for row_num, data in entries:
+                    preview = (data.get("Email_Subject") or "")[:120]
+                    self.tracker.log_status(
+                        preview,
+                        status="FAILED",
+                        email_id="",
+                        department=dept,
+                        employee_name=data.get("employee_name", ""),
+                        date=date_str,
+                        reason=f"Batch write failed: {exc}",
+                        processing_time=0.0,
+                    )
+
+        # Clear buffer after attempt
+        self._write_buffer.clear()
+
     def run(self) -> List[Dict]:
         logger.info("═" * 60)
         logger.info("Report Processor started")
@@ -298,6 +321,12 @@ class ReportProcessor:
                 date = result.get("date")
                 if dept and date:
                     processed_dates.add((dept, date))
+
+        # Flush buffered writes (batch to Sheets)
+        try:
+            self._flush_writes()
+        except Exception as exc:
+            logger.error(f"Error while flushing writes: {exc}")
 
         # Mark "Not Sent" only for Sales, only after processing all emails
         for dept, date_str in processed_dates:
