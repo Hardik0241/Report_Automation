@@ -1,6 +1,7 @@
 """
 vision_parser.py — Parse Callyzer screenshot using Gemini Vision.
 Includes image pre-processing (contrast enhancement) and JSON fallback.
+Extracts: Total Phone Calls, Connected Calls, Total Phone Calls Duration
 """
 
 import json
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 genai.configure(api_key=GEMINI_API_KEY)
 
+# Updated VISION PROMPT - Only 3 fields needed for Sales validation
 _VISION_PROMPT = """
 Analyse this Callyzer report screenshot carefully.
 
@@ -30,15 +32,13 @@ Return ONLY a JSON object with these exact keys - no markdown, no explanation:
 {
   "Total Phone Calls": integer,
   "Connected Calls": integer,
-  "Total Phone Calls Duration": "HH:MM:SS",
-  "Connected Calls Duration": "HH:MM:SS"
+  "Total Phone Calls Duration": "HH:MM:SS"
 }
 
 Rules:
-- Extract "Total Phone Calls" value from the Total Phone Calls section
-- Extract "Connected Calls" value from the Connected Calls section  
-- Extract duration for Total Phone Calls section (format like "1h 45m 34s")
-- Extract duration for Connected Calls section if available
+- Extract "Total Phone Calls" value from the screenshot (look for "Total Phone Calls" or "Outgoing Calls" or "Total Dialed")
+- Extract "Connected Calls" value from the screenshot (look for "Connected Calls" or "Premium Plus Connected Calls")
+- Extract duration for Total Phone Calls section (format like "1h 10m 7s" or "46m 55s")
 - Convert duration from "Xh Ym Zs" format to "HH:MM:SS" format
 - Use 0 for any number you cannot clearly read.
 - Use "00:00:00" for duration you cannot read.
@@ -58,7 +58,7 @@ class VisionParser:
     def parse_screenshot(self, image_path: str) -> Optional[Dict]:
         """
         Parse a Callyzer screenshot.
-        Returns a cleaned dict, or None if parsing fails completely.
+        Returns a cleaned dict with Total Phone Calls, Connected Calls, and Duration.
         """
         logger.info(f"Starting screenshot parsing for: {image_path}")
         
@@ -119,14 +119,13 @@ class VisionParser:
 
         if data is None:
             logger.warning(f"Could not parse JSON from vision response for {image_path}")
-            logger.warning(f"Raw response was: {raw_text}")
             return None
 
         logger.info(f"Successfully parsed screenshot data: {data}")
         return self._clean(data)
 
     # ─────────────────────────────────────────
-    # Image pre-processing
+    # Image pre-processing (kept for compatibility)
     # ─────────────────────────────────────────
 
     def _load_and_preprocess(self, path: str) -> Optional[Image.Image]:
@@ -162,7 +161,7 @@ class VisionParser:
 
     @staticmethod
     def _extract_json(text: str) -> Optional[Dict]:
-        text  = re.sub(r"```(?:json)?", "", text).strip()
+        text = re.sub(r"```(?:json)?", "", text).strip()
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if not match:
             return None
@@ -173,34 +172,50 @@ class VisionParser:
 
     @staticmethod
     def _clean(data: Dict) -> Dict:
-        int_fields = [
-            "Total Phone Calls", "Connected Calls"
-        ]
+        """Clean and standardize extracted data for the 3 required fields"""
+        
+        # Convert integer fields
+        int_fields = ["Total Phone Calls", "Connected Calls"]
         for field in int_fields:
             data[field] = coerce_int(data.get(field, 0))
 
-        # Handle duration format conversion from "1h 45m 34s" to "HH:MM:SS"
+        # Convert duration from various formats to HH:MM:SS
         def convert_duration(duration_str: str) -> str:
             if not duration_str or duration_str == "00:00:00":
                 return "00:00:00"
             
-            # Handle format like "1h 45m 34s"
+            # Handle format like "1h 10m 7s" or "1h 10m" or "46m 55s"
             import re
             match = re.search(r'((\d+)h)?\s*((\d+)m)?\s*((\d+)s)?', duration_str)
             if match:
-                hours = int(match.group(1) or 0)
-                minutes = int(match.group(2) or 0)
-                seconds = int(match.group(3) or 0)
+                hours = int(match.group(2) or 0)
+                minutes = int(match.group(4) or 0)
+                seconds = int(match.group(6) or 0)
                 return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
             
             # Handle existing HH:MM:SS format
             match = re.search(r'(\d{1,2}):(\d{2}):(\d{2})', duration_str)
             if match:
-                return duration_str
+                return f"{int(match.group(1)):02d}:{int(match.group(2)):02d}:{int(match.group(3)):02d}"
+            
+            # Handle MM:SS format
+            match = re.search(r'(\d{1,2}):(\d{2})', duration_str)
+            if match:
+                minutes = int(match.group(1))
+                seconds = int(match.group(2))
+                return f"00:{minutes:02d}:{seconds:02d}"
             
             return "00:00:00"
 
+        # Process duration field
         data["Total Phone Calls Duration"] = convert_duration(data.get("Total Phone Calls Duration", ""))
-        data["Connected Calls Duration"] = convert_duration(data.get("Connected Calls Duration", ""))
         
-        return data
+        # Remove any extra fields that might have been added (like Connected Calls Duration)
+        # Keep only the 3 fields we need
+        result = {
+            "Total Phone Calls": data.get("Total Phone Calls", 0),
+            "Connected Calls": data.get("Connected Calls", 0),
+            "Total Phone Calls Duration": data.get("Total Phone Calls Duration", "00:00:00")
+        }
+        
+        return result
