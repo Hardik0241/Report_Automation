@@ -1,5 +1,8 @@
 name: Report Automation Scheduler
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   schedule:
     - cron: '*/20 9-23 * * *'
@@ -18,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"           # ← ADD THIS LINE
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
