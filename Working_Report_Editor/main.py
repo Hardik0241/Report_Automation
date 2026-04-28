@@ -1,10 +1,9 @@
-# File: Working_Report_Editor/main.py
 """
 main.py — Production pipeline orchestrator.
 
 Key changes:
   - Buffer sheet writes in self._write_buffer and flush as batched writes at end of run.
-  - This reduces Sheets API calls and allows updating all employees quickly.
+  - Screenshot validation for Sales: matches Total Calls, Duration, Connected Calls from Callyzer screenshot
 """
 
 import logging
@@ -192,29 +191,61 @@ class ReportProcessor:
             if not ok:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
-            # ── 8. Screenshot parsing ─────────
+            # ── 8. Screenshot parsing for Sales department only ─────────
             screenshot_data = None
-            image_exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
-            logger.info(f"Found {len(attachments)} attachment(s): {attachments}")
+            if dept == "Sales":
+                image_exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
+                logger.info(f"Found {len(attachments)} attachment(s): {attachments}")
 
-            for att in attachments:
-                if any(att.lower().endswith(ext) for ext in image_exts):
-                    screenshot_data = self.vision.parse_screenshot(att)
-                    if screenshot_data:
-                        logger.info(f"Screenshot parsed: {screenshot_data}")
-                        break
-                    else:
-                        logger.warning(f"Failed to parse screenshot: {att}")
+                for att in attachments:
+                    if any(att.lower().endswith(ext) for ext in image_exts):
+                        screenshot_data = self.vision.parse_screenshot(att)
+                        if screenshot_data:
+                            logger.info(f"Screenshot parsed: {screenshot_data}")
+                            break
+                        else:
+                            logger.warning(f"Failed to parse screenshot: {att}")
 
-            if not screenshot_data:
-                logger.warning("No screenshot data parsed from any attachment")
-
-            # ── 9. Data match validation ──────
-            ok, match_reason = self.validator.validate_data_match(
-                email_data, screenshot_data, dept
-            )
-            if not ok:
-                return _fail(match_reason, dept=dept, emp=canonical_name, date=date_str)
+                if not screenshot_data:
+                    logger.warning("No screenshot found for Sales report - validation will fail")
+                    return _fail("Sales report requires screenshot attachment for verification", dept=dept, emp=canonical_name, date=date_str)
+                
+                # ── 9. Sales Data Match Validation (Email vs Screenshot) ──
+                # Extract values from email
+                email_total_calls = email_data.get("Total Dialed", 0)
+                email_connected = email_data.get("Total Connected", 0)
+                email_duration = email_data.get("Duration", "00:00:00")
+                
+                # Extract values from screenshot (Callyzer format)
+                screenshot_total_calls = screenshot_data.get("Total Phone Calls", 0)
+                screenshot_connected = screenshot_data.get("Connected Calls", 0)
+                screenshot_duration = screenshot_data.get("Total Phone Calls Duration", "00:00:00")
+                
+                logger.info(f"Email values: Total Calls={email_total_calls}, Connected={email_connected}, Duration={email_duration}")
+                logger.info(f"Screenshot values: Total Calls={screenshot_total_calls}, Connected={screenshot_connected}, Duration={screenshot_duration}")
+                
+                # Validation checks
+                mismatches = []
+                
+                # Check 1: Total Calls / Total Dialed
+                if email_total_calls != screenshot_total_calls:
+                    mismatches.append(f"Total Calls mismatch: Email={email_total_calls}, Screenshot={screenshot_total_calls}")
+                
+                # Check 2: Connected Calls
+                if email_connected != screenshot_connected:
+                    mismatches.append(f"Connected Calls mismatch: Email={email_connected}, Screenshot={screenshot_connected}")
+                
+                # Check 3: Duration
+                if email_duration != screenshot_duration:
+                    mismatches.append(f"Duration mismatch: Email={email_duration}, Screenshot={screenshot_duration}")
+                
+                if mismatches:
+                    return _fail(f"Screenshot validation failed: {' | '.join(mismatches)}", dept=dept, emp=canonical_name, date=date_str)
+                
+                logger.info(f"✅ Sales report validated successfully against screenshot")
+            else:
+                # HR department - no screenshot validation required
+                logger.info("HR report - skipping screenshot validation")
 
             # ── 10. Ensure sheet rows exist ──────────────
             # call ensure_date_for_all_employees once per dept/date (it is idempotent)
