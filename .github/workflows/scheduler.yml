@@ -2,7 +2,6 @@ name: Report Automation Scheduler
 
 on:
   schedule:
-    # Every 20 minutes from 09:00 to 23:40 UTC (2:30 PM to 5:00 AM IST next day)
     - cron: '*/20 9-23 * * *'
     - cron: '0,20,40 0-4 * * *'
   workflow_dispatch:
@@ -15,11 +14,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # Force Node.js 24 (removes warning)
+          set-safe-directory: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+        # These actions will be updated by GitHub before June 2026
 
       - name: Install dependencies
         run: |
