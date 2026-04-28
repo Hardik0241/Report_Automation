@@ -2,8 +2,9 @@ name: Report Automation Scheduler
 
 on:
   schedule:
-    - cron: '*/20 9-18 * * *'
-    - cron: '0 19 * * *'
+    # Every 20 minutes from 09:00 to 23:40 UTC (2:30 PM to 5:00 AM IST next day)
+    - cron: '*/20 9-23 * * *'
+    - cron: '0,20,40 0-4 * * *'
   workflow_dispatch:
 
 jobs:
@@ -35,6 +36,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           SALES_SPREADSHEET_ID: ${{ secrets.SALES_SPREADSHEET_ID }}
           HR_SPREADSHEET_ID: ${{ secrets.HR_SPREADSHEET_ID }}
-          GMAIL_CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          GMAIL_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          GMAIL_REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
