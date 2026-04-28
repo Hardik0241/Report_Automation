@@ -14,13 +14,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          # Force Node.js 24 (removes warning)
-          set-safe-directory: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
-        # These actions will be updated by GitHub before June 2026
+        with:
+          python-version: "3.11"           # ← ADD THIS LINE
 
       - name: Install dependencies
         run: |
