@@ -5,6 +5,7 @@ env:
 
 on:
   schedule:
+    # Every 20 minutes from 09:00 to 23:40 UTC (2:30 PM to 5:00 AM IST next day)
     - cron: '*/20 9-23 * * *'
     - cron: '0,20,40 0-4 * * *'
   workflow_dispatch:
