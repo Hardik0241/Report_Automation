@@ -1,22 +1,24 @@
 """
-config.py — Configuration that works for BOTH:
-   1. Streamlit Cloud (uses st.secrets)
-   2. GitHub Actions (uses environment variables)
+config.py — Complete configuration for Report Automation System
+Works on Streamlit Cloud AND GitHub Actions
 """
 
 import streamlit as st
 import os
 import json
 
-# ─────────────────────────────────────────────
-# LOAD SECRETS (Streamlit Cloud or Environment)
-# ─────────────────────────────────────────────
+# ============================================================
+# LOAD SECRETS (Streamlit Cloud or Environment Variables)
+# ============================================================
 try:
+    # Try Streamlit Cloud secrets first
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     SALES_SPREADSHEET_ID = st.secrets["SALES_SPREADSHEET_ID"]
     HR_SPREADSHEET_ID = st.secrets["HR_SPREADSHEET_ID"]
     GOOGLE_CREDENTIALS_DICT = dict(st.secrets["GOOGLE_CREDENTIALS"])
-except:
+    logger.info("Loaded secrets from Streamlit Cloud")
+except Exception:
+    # Fallback to environment variables (GitHub Actions)
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
     SALES_SPREADSHEET_ID = os.environ.get("SALES_SPREADSHEET_ID", "")
     HR_SPREADSHEET_ID = os.environ.get("HR_SPREADSHEET_ID", "")
@@ -26,9 +28,9 @@ except:
     else:
         GOOGLE_CREDENTIALS_DICT = {}
 
-# ─────────────────────────────────────────────
-# EMPLOYEE LISTS — Fixed order
-# ─────────────────────────────────────────────
+# ============================================================
+# EMPLOYEE LISTS (Fixed order - DO NOT CHANGE)
+# ============================================================
 SALES_EMPLOYEES = [
     "Apoorva", "Abhijit", "Sakib", "Jayesh",
     "Saif", "Rajesh", "Manasvi", "Praful", "Sachin", "Aishwary",
@@ -39,9 +41,9 @@ HR_EMPLOYEES = [
     "Ruwaida", "Amanpreet", "Mehvish",
 ]
 
-# ─────────────────────────────────────────────
-# SALES EMAIL → NAME MAP
-# ─────────────────────────────────────────────
+# ============================================================
+# EMAIL TO NAME MAPPING (For fallback when name not in body)
+# ============================================================
 SALES_EMAIL_MAP = {
     "apoorva.edujam@gmail.com": "Apoorva",
     "abhijit.edujam@gmail.com": "Abhijit",
@@ -67,25 +69,25 @@ HR_EMAIL_MAP = {
     "mehvish.hredujam@gmail.com": "Mehvish",
 }
 
-# ─────────────────────────────────────────────
+# ============================================================
 # SALES DEADLINE RULE (Required by main.py)
-# ─────────────────────────────────────────────
+# ============================================================
 SALES_CUTOFF_HOUR = 0
 SALES_CUTOFF_MINUTE = 0
 
-# ─────────────────────────────────────────────
+# ============================================================
 # SCHEDULER ACTIVE WINDOW (Required by scheduler.py)
-# ─────────────────────────────────────────────
+# ============================================================
 ACTIVE_START_HOUR = 14
 ACTIVE_START_MINUTE = 30
 ACTIVE_END_HOUR = 23
 ACTIVE_END_MINUTE = 59
 
-# ─────────────────────────────────────────────
+# ============================================================
 # GOOGLE SHEETS CONFIGURATION
-# ─────────────────────────────────────────────
+# ============================================================
 DATE_IN_SUBJECT_FORMAT = "%d-%m-%Y"
-SHEET_NAME_FORMAT = "%b-%Y"
+SHEET_NAME_FORMAT = "%b-%Y"  # "Mar-2026", "Apr-2026"
 
 SALES_COLUMN_MAPPING = {
     "Date": 1,
@@ -112,39 +114,37 @@ HR_COLUMN_MAPPING = {
 SALES_HEADERS = list(SALES_COLUMN_MAPPING.keys())
 HR_HEADERS = list(HR_COLUMN_MAPPING.keys())
 
-# ─────────────────────────────────────────────
+# ============================================================
 # GMAIL CONFIGURATION
-# ─────────────────────────────────────────────
-GMAIL_QUERY = "is:unread"
+# ============================================================
+GMAIL_QUERY = "is:unread"  # Fetch all unread emails (filter by sender later)
 MAX_EMAILS_PER_RUN = 50
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 GMAIL_USER_ID = "me"
 
-# ─────────────────────────────────────────────
+# ============================================================
 # GEMINI CONFIGURATION
-# ─────────────────────────────────────────────
+# ============================================================
 GEMINI_MODEL = "gemini-2.5-flash"
 
-# ─────────────────────────────────────────────
+# ============================================================
 # VALIDATION RULES
-# ─────────────────────────────────────────────
+# ============================================================
 VALIDATION_RULES = {
     "Sales": {
         "required_fields": ["Total Dialed", "Total Connected", "Duration"],
-        "numeric_fields": ["Total Dialed", "Total Connected", "Prospect"],
         "tolerance_pct": 5,
         "name_fuzzy_threshold": 0.80,
     },
     "HR": {
         "required_fields": ["Total Calls", "Connected Calls", "Duration"],
-        "numeric_fields": ["Total Calls", "Connected Calls", "Tomorrow Interview Lineups", "Interview Held"],
         "tolerance_pct": 5,
         "name_fuzzy_threshold": 0.80,
     },
 }
 
 DEPARTMENT_KEYWORDS = {
-    "Sales": ["sales", "callyzer", "dialer", "prospect", "dialed", "dial"],
+    "Sales": ["sales", "callyzer", "dialer", "prospect", "dialed", "dial", "outgoing"],
     "HR": ["hr", "recruitment", "interview", "hiring", "lineup"],
 }
 
@@ -154,23 +154,23 @@ DATE_PATTERNS = [
     r"(\d{4}-\d{2}-\d{2})",
 ]
 
-# ─────────────────────────────────────────────
+# ============================================================
 # RETRY / RESILIENCE
-# ─────────────────────────────────────────────
+# ============================================================
 MAX_RETRIES = 3
 RETRY_MIN_WAIT_SEC = 2
 RETRY_MAX_WAIT_SEC = 10
 
-# ─────────────────────────────────────────────
+# ============================================================
 # LOGGING / TRACKING
-# ─────────────────────────────────────────────
+# ============================================================
 LOG_DIR = "logs"
 PROCESSING_LOG_PATH = f"{LOG_DIR}/processing_logs.csv"
 ERROR_LOG_PATH = f"{LOG_DIR}/error_logs.jsonl"
 DUPLICATE_CACHE_PATH = f"{LOG_DIR}/duplicate_cache.json"
 DUPLICATE_WINDOW_HOURS = 24
 
-# ─────────────────────────────────────────────
+# ============================================================
 # SERVICE ACCOUNT FILE (Optional, for local use)
-# ─────────────────────────────────────────────
+# ============================================================
 SERVICE_ACCOUNT_FILE = "credentials.json"
