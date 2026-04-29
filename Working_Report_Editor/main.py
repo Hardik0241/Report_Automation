@@ -1,381 +1,155 @@
 """
-main.py — Production pipeline orchestrator.
-
-Key changes:
-  - Buffer sheet writes in self._write_buffer and flush as batched writes at end of run.
-  - Screenshot validation for Sales: matches Total Calls, Duration, Connected Calls from Callyzer screenshot
+vision_parser.py — Parse Callyzer screenshot using Gemini Vision
+Extracts: Total Phone Calls, Connected Calls, Total Phone Calls Duration
 """
 
+import json
 import logging
-import time
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+import os
+import re
+from typing import Dict, Optional
 
-from config import (
-    HR_EMAIL_MAP, HR_EMPLOYEES,
-    SALES_CUTOFF_HOUR, SALES_CUTOFF_MINUTE,
-    SALES_EMAIL_MAP, SALES_EMPLOYEES,
-)
-from error_handler import BaseProcessingError, log_error
-from gmail_reader import GmailReader
-from gemini_parser import GeminiParser
-from sheets_service import SheetsService
-from tracker import Tracker
-from utils import (
-    extract_date_from_subject,
-    extract_email_address,
-    received_timestamp_to_date,
-    received_timestamp_to_datetime,
-)
-from validator import DataValidator
-from vision_parser import VisionParser
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning)
+import google.generativeai as genai
+from PIL import Image
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+from config import GEMINI_API_KEY, GEMINI_MODEL
+from error_handler import with_retry
+from utils import coerce_int
+
 logger = logging.getLogger(__name__)
 
+genai.configure(api_key=GEMINI_API_KEY)
 
-class ReportProcessor:
+_VISION_PROMPT = """
+Analyse this Callyzer report screenshot carefully.
 
+Return ONLY a JSON object with these exact keys - no markdown, no explanation:
+
+{
+  "Total Phone Calls": integer,
+  "Connected Calls": integer,
+  "Total Phone Calls Duration": "HH:MM:SS"
+}
+
+Look for:
+- "Total Phone Calls" or "Outgoing Calls" or "Total Dialed" - this is the total number of calls made
+- "Connected Calls" or "Premium Plus Connected Calls" - this is the number of successful connections
+- Duration format like "1h 10m 7s" or "46m 55s" or "01:10:07"
+
+Convert duration to HH:MM:SS format.
+Use 0 for numbers you cannot clearly read.
+Use "00:00:00" for duration you cannot read.
+"""
+
+
+class VisionParser:
     def __init__(self):
-        logger.info("Initialising ReportProcessor …")
-        self.gmail     = GmailReader()
-        self.parser    = GeminiParser()
-        self.vision    = VisionParser()
-        self.sheets    = SheetsService()
-        self.tracker   = Tracker()
-        self.validator = DataValidator()
-        # Buffer: {(dept, date_str): [(row_num, data_dict), ...]}
-        self._write_buffer: Dict[Tuple[str, str], List[Tuple[int, Dict]]] = {}
+        self.model = genai.GenerativeModel(GEMINI_MODEL)
 
-    # ─────────────────────────────────────────
-    # Per-email pipeline
-    # ─────────────────────────────────────────
-
-    def process_email(self, email: Dict) -> Dict:
-        t0          = time.time()
-        email_id    = email.get("id", "")
-        subject     = email.get("subject", "")
-        body        = email.get("body", "")
-        attachments = email.get("attachments", [])
-        email_hash  = email.get("hash", "")
-        from_header = email.get("from", "")
-        received_at: datetime = email.get("received_at", datetime.now())
-        received_ms: int      = email.get("received_ms", 0)
-        preview     = (subject or body)[:120]
-
-        # Parse sender header into email + name
-        sender_email = extract_email_address(from_header)
-        # Try to extract display name (part before angle brackets) otherwise use sender_email
-        sender_name = ""
-        if "<" in from_header and ">" in from_header:
-            try:
-                sender_name = from_header.split("<")[0].strip().strip('"').strip()
-            except Exception:
-                sender_name = sender_email
-        else:
-            possible_name = from_header.split("<")[0].strip().strip('"').strip()
-            sender_name = possible_name if possible_name and "@" not in possible_name else sender_email
-
-        def _fail(reason: str, dept="", emp="", date="") -> Dict:
-            self.tracker.log_status(
-                preview,
-                status="FAILED",
-                email_id=email_id,
-                department=dept,
-                employee_name=emp,
-                date=date,
-                reason=reason,
-                processing_time=time.time() - t0,
-                sender_email=sender_email,
-                sender_name=sender_name,
-                received_time=received_at,
-            )
-            logger.warning(f"FAILED [{email_id}]: {reason}")
-            return {"status": "FAILED", "reason": reason}
-
-        # ── 1. Duplicate check ────────────────
-        if self.tracker.is_duplicate(email_hash):
-            self.tracker.log_status(
-                preview,
-                status="DUPLICATE",
-                email_id=email_id,
-                reason="Already processed within window",
-                processing_time=time.time() - t0,
-                sender_email=sender_email,
-                sender_name=sender_name,
-                received_time=received_at,
-            )
-            logger.info(f"DUPLICATE skipped: {subject!r}")
-            return {"status": "DUPLICATE"}
+    @with_retry()
+    def parse_screenshot(self, image_path: str) -> Optional[Dict]:
+        if not image_path or not os.path.exists(image_path):
+            logger.warning(f"Screenshot not found: {image_path}")
+            return None
 
         try:
-            # ── 2. Parse email body ───────────
-            email_data = self.parser.parse_email(body)
-            if not email_data:
-                return _fail("Email body parsing failed completely")
+            img = Image.open(image_path)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
 
-            dept = email_data.get("department", "Unknown")
+            w, h = img.size
+            if w < 800:
+                scale = 800 / w
+                new_size = (int(w * scale), int(h * scale))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
 
-            # ── 3. Resolve department from sender if still Unknown ───────
-            if dept == "Unknown":
-                if sender_email in SALES_EMAIL_MAP:
-                    dept = "Sales"
-                elif sender_email in HR_EMAIL_MAP:
-                    dept = "HR"
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                img.save(tmp.name, 'JPEG', quality=95)
+                temp_path = tmp.name
 
-            if dept not in ("Sales", "HR"):
-                return _fail(
-                    f"Could not determine department — not in Sales/HR email maps "
-                    f"and body detection failed. Sender: {sender_email}"
-                )
-
-            email_data["department"] = dept
-            employees = SALES_EMPLOYEES if dept == "Sales" else HR_EMPLOYEES
-
-            # ── 4. Resolve employee name ──────────────────────────────────
-            body_name = email_data.get("employee_name", "").strip()
-
-            if body_name:
-                ok, canonical_name, name_reason = self.validator.validate_employee_name(
-                    body_name, dept
-                )
-                if not ok:
-                    email_map = SALES_EMAIL_MAP if dept == "Sales" else HR_EMAIL_MAP
-                    canonical_name = email_map.get(sender_email, "")
-                    if not canonical_name:
-                        return _fail(
-                            f"Name '{body_name}' not matched & sender not in email map",
-                            dept=dept,
-                        )
-                    logger.info(f"Name from body failed; used email map: {canonical_name}")
-            else:
-                email_map = SALES_EMAIL_MAP if dept == "Sales" else HR_EMAIL_MAP
-                canonical_name = email_map.get(sender_email, "")
-                if not canonical_name:
-                    return _fail(
-                        f"No name in email body and sender '{sender_email}' "
-                        f"not found in email map",
-                        dept=dept,
-                    )
-                logger.info(f"No name in body; resolved from email map: {canonical_name}")
-
-            email_data["employee_name"] = canonical_name
-
-            # ── 5. Determine date ─────────────────────────────────────────
-            if dept == "Sales":
-                date_str = received_timestamp_to_date(received_ms) if received_ms \
-                           else received_at.strftime("%d-%m-%Y")
-                logger.info(f"Sales email — using received date: {date_str}")
-            else:  # HR
-                date_str = extract_date_from_subject(subject)
-                if not date_str:
-                    date_str = received_at.strftime("%d-%m-%Y")
-                    logger.info(f"HR: no date in subject, using received date: {date_str}")
-
-            email_data["date"] = date_str
-
-            # ── 6. Sales midnight cutoff ──────────────────────────────────
-            if dept == "Sales":
-                if received_at.hour == SALES_CUTOFF_HOUR and received_at.minute >= SALES_CUTOFF_MINUTE:
-                    return _fail(
-                        f"Sales report received after midnight cutoff ({received_at.strftime('%H:%M')}). Deadline is 11:59 PM.",
-                        dept=dept, emp=canonical_name, date=date_str,
-                    )
-
-            # ── 7. Required fields ────────────
-            ok, field_err = self.validator.validate_required_fields(email_data, dept)
-            if not ok:
-                return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
-
-            # ── 8. Screenshot parsing for Sales department only ─────────
-            screenshot_data = None
-            if dept == "Sales":
-                image_exts = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
-                logger.info(f"Found {len(attachments)} attachment(s): {attachments}")
-
-                for att in attachments:
-                    if any(att.lower().endswith(ext) for ext in image_exts):
-                        screenshot_data = self.vision.parse_screenshot(att)
-                        if screenshot_data:
-                            logger.info(f"Screenshot parsed: {screenshot_data}")
-                            break
-                        else:
-                            logger.warning(f"Failed to parse screenshot: {att}")
-
-                if not screenshot_data:
-                    logger.warning("No screenshot found for Sales report - validation will fail")
-                    return _fail("Sales report requires screenshot attachment for verification", dept=dept, emp=canonical_name, date=date_str)
-                
-                # ── 9. Sales Data Match Validation (Email vs Screenshot) ──
-                # Extract values from email
-                email_total_calls = email_data.get("Total Dialed", 0)
-                email_connected = email_data.get("Total Connected", 0)
-                email_duration = email_data.get("Duration", "00:00:00")
-                
-                # Extract values from screenshot (Callyzer format)
-                screenshot_total_calls = screenshot_data.get("Total Phone Calls", 0)
-                screenshot_connected = screenshot_data.get("Connected Calls", 0)
-                screenshot_duration = screenshot_data.get("Total Phone Calls Duration", "00:00:00")
-                
-                logger.info(f"Email values: Total Calls={email_total_calls}, Connected={email_connected}, Duration={email_duration}")
-                logger.info(f"Screenshot values: Total Calls={screenshot_total_calls}, Connected={screenshot_connected}, Duration={screenshot_duration}")
-                
-                # Validation checks
-                mismatches = []
-                
-                # Check 1: Total Calls / Total Dialed
-                if email_total_calls != screenshot_total_calls:
-                    mismatches.append(f"Total Calls mismatch: Email={email_total_calls}, Screenshot={screenshot_total_calls}")
-                
-                # Check 2: Connected Calls
-                if email_connected != screenshot_connected:
-                    mismatches.append(f"Connected Calls mismatch: Email={email_connected}, Screenshot={screenshot_connected}")
-                
-                # Check 3: Duration
-                if email_duration != screenshot_duration:
-                    mismatches.append(f"Duration mismatch: Email={email_duration}, Screenshot={screenshot_duration}")
-                
-                if mismatches:
-                    return _fail(f"Screenshot validation failed: {' | '.join(mismatches)}", dept=dept, emp=canonical_name, date=date_str)
-                
-                logger.info(f"✅ Sales report validated successfully against screenshot")
-            else:
-                # HR department - no screenshot validation required
-                logger.info("HR report - skipping screenshot validation")
-
-            # ── 10. Ensure sheet rows exist ──────────────
-            # call ensure_date_for_all_employees once per dept/date (it is idempotent)
-            self.sheets.ensure_date_for_all_employees(dept, date_str)
-
-            # Find the employee row (cached by SheetsService where possible)
-            row_num = self.sheets.find_employee_row(dept, date_str, canonical_name)
-            if not row_num:
-                return _fail(
-                    f"Row not found for {canonical_name} on {date_str}",
-                    dept=dept, emp=canonical_name, date=date_str,
-                )
-
-            # ── Buffer the write (do not perform single-row update now)
-            key = (dept, date_str)
-            self._write_buffer.setdefault(key, []).append((row_num, email_data))
-
-            # ── 11. Mark processed + log ─────
-            self.tracker.mark_processed(email_hash)
-            elapsed = time.time() - t0
-            self.tracker.log_status(
-                preview,
-                status="SUCCESS",
-                email_id=email_id,
-                department=dept,
-                employee_name=canonical_name,
-                date=date_str,
-                processing_time=elapsed,
-                sender_email=sender_email,
-                sender_name=sender_name,
-                received_time=received_at,
-            )
-            logger.info(
-                f"SUCCESS — {dept} / {canonical_name} / {date_str} (row {row_num}) [{elapsed:.1f}s]"
-            )
-            return {
-                "status":     "SUCCESS",
-                "department": dept,
-                "employee":   canonical_name,
-                "date":       date_str,
-                "row":        row_num,
-            }
-
-        except BaseProcessingError as exc:
-            log_error(exc, {"email_id": email_id, "subject": subject})
-            return _fail(str(exc))
-
-        except Exception as exc:
-            log_error(exc, {"email_id": email_id, "subject": subject})
-            return _fail(f"Unexpected error: {exc}")
-
-    # ─────────────────────────────────────────
-    # Batch runner
-    # ─────────────────────────────────────────
-    def _flush_writes(self) -> None:
-        """Flush buffered writes to Google Sheets using batch_update per (dept,date)."""
-        if not self._write_buffer:
-            logger.info("No buffered writes to flush.")
-            return
-
-        for (dept, date_str), entries in self._write_buffer.items():
             try:
-                logger.info(f"Flushing {len(entries)} write(s) for {dept} / {date_str}")
-                # entries is list of (row_num, data_dict)
-                self.sheets.write_batch(dept, date_str, entries)
-            except Exception as exc:
-                logger.error(f"Failed to flush writes for {dept}/{date_str}: {exc}")
-                # If flush fails, log individual failures in processing log for traceability
-                for row_num, data in entries:
-                    preview = (data.get("Email_Subject") or "")[:120]
-                    self.tracker.log_status(
-                        preview,
-                        status="FAILED",
-                        email_id="",
-                        department=dept,
-                        employee_name=data.get("employee_name", ""),
-                        date=date_str,
-                        reason=f"Batch write failed: {exc}",
-                        processing_time=0.0,
-                    )
+                response = self.model.generate_content([_VISION_PROMPT, temp_path])
+                raw_text = response.text.strip()
+                data = self._extract_json(raw_text)
+            finally:
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
 
-        # Clear buffer after attempt
-        self._write_buffer.clear()
+            if data is None:
+                logger.warning(f"Could not parse JSON from vision response")
+                return None
 
-    def run(self) -> List[Dict]:
-        logger.info("═" * 60)
-        logger.info("Report Processor started")
+            return self._clean(data)
 
-        emails = self.gmail.fetch_emails()
-        logger.info(f"Fetched {len(emails)} email(s) to process.")
-
-        results: List[Dict] = []
-        processed_dates: set = set()
-
-        for idx, email in enumerate(emails, start=1):
-            logger.info(
-                f"Processing email {idx}/{len(emails)}: {email.get('subject', '')!r}"
-            )
-            result = self.process_email(email)
-            results.append(result)
-
-            if result.get("status") == "SUCCESS":
-                dept = result.get("department")
-                date = result.get("date")
-                if dept and date:
-                    processed_dates.add((dept, date))
-
-        # Flush buffered writes (batch to Sheets)
-        try:
-            self._flush_writes()
         except Exception as exc:
-            logger.error(f"Error while flushing writes: {exc}")
+            logger.error(f"Image processing failed: {exc}")
+            return None
 
-        # Mark "Not Sent" only for Sales, only after processing all emails
-        for dept, date_str in processed_dates:
-            if dept == "Sales":
-                logger.info(f"Marking unsubmitted Sales employees as 'Not Sent' for {date_str}")
-                self.sheets.mark_not_sent(dept, date_str)
-            # HR: no "Not Sent" marking
+    @staticmethod
+    def _extract_json(text: str) -> Optional[Dict]:
+        text = re.sub(r"```(?:json)?", "", text).strip()
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if not match:
+            return None
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            return None
 
-        success   = sum(1 for r in results if r["status"] == "SUCCESS")
-        failed    = sum(1 for r in results if r["status"] == "FAILED")
-        duplicate = sum(1 for r in results if r["status"] == "DUPLICATE")
-        logger.info(
-            f"Run complete → SUCCESS={success}  FAILED={failed}  DUPLICATE={duplicate}"
-        )
-        logger.info("═" * 60)
-        return results
+    @staticmethod
+    def _clean(data: Dict) -> Dict:
+        # Convert integer fields
+        data["Total Phone Calls"] = coerce_int(data.get("Total Phone Calls", 0))
+        data["Connected Calls"] = coerce_int(data.get("Connected Calls", 0))
 
+        # Convert duration
+        duration_str = data.get("Total Phone Calls Duration", "")
+        data["Total Phone Calls Duration"] = VisionParser._convert_duration(duration_str)
 
-if __name__ == "__main__":
-    processor = ReportProcessor()
-    processor.run()
+        return {
+            "Total Phone Calls": data["Total Phone Calls"],
+            "Connected Calls": data["Connected Calls"],
+            "Total Phone Calls Duration": data["Total Phone Calls Duration"],
+        }
+
+    @staticmethod
+    def _convert_duration(duration_str: str) -> str:
+        if not duration_str or duration_str == "00:00:00":
+            return "00:00:00"
+
+        # Handle Xh Ym Zs format
+        match = re.search(r'(\d+)h\s*(\d+)m\s*(\d+)s', duration_str, re.IGNORECASE)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
+
+        # Handle Xh Ym format
+        match = re.search(r'(\d+)h\s*(\d+)m', duration_str, re.IGNORECASE)
+        if match:
+            h, m = int(match.group(1)), int(match.group(2))
+            return f"{h:02d}:{m:02d}:00"
+
+        # Handle Ym Zs format
+        match = re.search(r'(\d+)m\s*(\d+)s', duration_str, re.IGNORECASE)
+        if match:
+            m, s = int(match.group(1)), int(match.group(2))
+            return f"00:{m:02d}:{s:02d}"
+
+        # Handle HH:MM:SS format
+        match = re.search(r'(\d{1,2}):(\d{2}):(\d{2})', duration_str)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
+
+        # Handle MM:SS format
+        match = re.search(r'(\d{1,2}):(\d{2})', duration_str)
+        if match:
+            m, s = int(match.group(1)), int(match.group(2))
+            return f"00:{m:02d}:{s:02d}"
+
+        return "00:00:00"
