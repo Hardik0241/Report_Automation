@@ -1,6 +1,6 @@
 """
-dashboard.py — Advanced Report Automation Dashboard
-Manual Refresh Only | No Auto-refresh
+dashboard.py — Report Automation Dashboard
+Manual Refresh Only
 """
 
 import os
@@ -31,34 +31,31 @@ div[data-testid="stMetric"] .stMetricValue { color: #ffffff !important; }
 </style>
 """, unsafe_allow_html=True)
 
+
 @st.cache_data(ttl=0)
 def load_logs() -> pd.DataFrame:
     path = "logs/processing_logs.csv"
-    cols = ["Timestamp", "Email_ID", "Email_Subject", "Sender_Email", "Sender_Name",
-            "Received_Time", "Status", "Department", "Employee_Name", "Date", "Reason", "Processing_Time_Sec"]
     if not os.path.exists(path):
-        return pd.DataFrame(columns=cols)
+        return pd.DataFrame(columns=[
+            "Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"
+        ])
     df = pd.read_csv(path)
-    for col in cols:
-        if col not in df.columns:
-            df[col] = pd.NA
     if "Timestamp" in df.columns:
         df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
-    if "Received_Time" in df.columns:
-        df["Received_Time"] = pd.to_datetime(df["Received_Time"], errors="coerce")
     return df
+
 
 def get_stats(df: pd.DataFrame) -> dict:
     if df.empty:
-        return {"total": 0, "success": 0, "failed": 0, "duplicate": 0, "rate": 0, "today_success": 0}
+        return {"total": 0, "success": 0, "failed": 0, "rate": 0}
+
     total = len(df)
     success = len(df[df["Status"] == "SUCCESS"])
     failed = len(df[df["Status"] == "FAILED"])
-    duplicate = len(df[df["Status"] == "DUPLICATE"])
     rate = (success / total * 100) if total > 0 else 0
-    today_df = df[df["Timestamp"].dt.date == datetime.now().date()] if not df.empty else pd.DataFrame()
-    today_success = len(today_df[today_df["Status"] == "SUCCESS"]) if not today_df.empty else 0
-    return {"total": total, "success": success, "failed": failed, "duplicate": duplicate, "rate": round(rate, 1), "today_success": today_success}
+
+    return {"total": total, "success": success, "failed": failed, "rate": round(rate, 1)}
+
 
 # Sidebar
 with st.sidebar:
@@ -75,21 +72,29 @@ with st.sidebar:
     st.markdown("### 📅 Schedule Info")
     st.info("Active Window: 2:30 PM - 11:59 PM | Runs every 20 minutes via GitHub Actions")
     st.markdown("---")
-    st.caption("📊 Advanced Report Automation System | Powered by Gemini AI")
+    st.caption("📊 Report Automation System | Powered by Gemini AI")
 
 # Main Header
-st.markdown('<div class="dashboard-header"><div class="dashboard-title">📊 Report Automation Dashboard</div><div class="dashboard-subtitle">Real-time monitoring | AI-powered extraction | Google Sheets integration</div></div>', unsafe_allow_html=True)
+st.markdown("""
+<div class="dashboard-header">
+    <div class="dashboard-title">📊 Report Automation Dashboard</div>
+    <div class="dashboard-subtitle">Real-time monitoring | AI-powered extraction | Google Sheets integration</div>
+</div>
+""", unsafe_allow_html=True)
 
 df = load_logs()
 stats = get_stats(df)
 
 # KPI Cards
-c1, c2, c3, c4, c5 = st.columns(5)
-with c1: st.metric("📧 Total Processed", stats["total"])
-with c2: st.metric("✅ Success", stats["success"])
-with c3: st.metric("❌ Failed", stats["failed"])
-with c4: st.metric("🔄 Duplicate", stats["duplicate"])
-with c5: st.metric("📈 Today's Success", stats["today_success"])
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.metric("📧 Total Processed", stats["total"])
+with c2:
+    st.metric("✅ Success", stats["success"])
+with c3:
+    st.metric("❌ Failed", stats["failed"])
+with c4:
+    st.metric("📈 Success Rate", f"{stats['rate']}%")
 
 st.markdown("---")
 
@@ -98,56 +103,41 @@ if df.empty:
     st.stop()
 
 # Recent Reports
-st.markdown('<div class="section-header">📨 Recent Reports (Sender & Time)</div>', unsafe_allow_html=True)
-recent = df[df["Status"] == "SUCCESS"].sort_values("Received_Time", ascending=False).head(15)
+st.markdown('<div class="section-header">📨 Recent Activity</div>', unsafe_allow_html=True)
+recent = df.sort_values("Timestamp", ascending=False).head(15)
 if not recent.empty:
-    display = recent[["Received_Time", "Sender_Name", "Employee_Name", "Department", "Date"]].copy()
-    display.columns = ["Time", "Sender", "Employee", "Dept", "Report Date"]
+    display = recent[["Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"]].copy()
+    display.columns = ["Time", "Status", "Dept", "Employee", "Report Date", "Reason"]
     display["Time"] = display["Time"].dt.strftime("%d-%b %I:%M:%S %p")
     st.dataframe(display, use_container_width=True, hide_index=True)
-else:
-    st.info("No recent submissions")
 
 st.markdown("---")
 
 # Trend Chart
-st.markdown('<div class="section-header">📈 Daily Processing Trend</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-header">📈 Daily Trend</div>', unsafe_allow_html=True)
 trend = df.dropna(subset=["Timestamp"]).assign(Date=lambda d: d["Timestamp"].dt.date).groupby(["Date", "Status"]).size().reset_index(name="Count")
 if not trend.empty:
-    fig = px.bar(trend, x="Date", y="Count", color="Status", color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444", "DUPLICATE": "#f59e0b"}, text="Count")
+    fig = px.bar(trend, x="Date", y="Count", color="Status", color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444"}, text="Count")
     fig.update_layout(height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig, use_container_width=True)
 
-# Two columns for Department and Top Employees
-col_a, col_b = st.columns(2)
-with col_a:
-    st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
-    dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
-    if not dept_data.empty:
-        dept_data.columns = ["Department", "Count"]
-        fig = px.pie(dept_data, names="Department", values="Count", color="Department", color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"}, hole=0.4)
-        fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, use_container_width=True)
+# Department Distribution
+st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
+dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
+if not dept_data.empty:
+    dept_data.columns = ["Department", "Count"]
+    fig = px.pie(dept_data, names="Department", values="Count", color="Department", color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"}, hole=0.4)
+    fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig, use_container_width=True)
 
-with col_b:
-    st.markdown('<div class="section-header">🏆 Top Contributors</div>', unsafe_allow_html=True)
-    top_emp = df[df["Status"] == "SUCCESS"]["Employee_Name"].value_counts().head(8).reset_index()
-    if not top_emp.empty:
-        top_emp.columns = ["Employee", "Reports"]
-        fig = px.bar(top_emp, x="Reports", y="Employee", orientation="h", color="Reports", color_continuous_scale="blues", text="Reports")
-        fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, use_container_width=True)
-
-# Hourly Pattern
-st.markdown('<div class="section-header">⏰ Submission Time Pattern</div>', unsafe_allow_html=True)
-if "Received_Time" in df.columns and not df["Received_Time"].isna().all():
-    hourly_df = df[df["Status"] == "SUCCESS"].copy()
-    hourly_df["Hour"] = hourly_df["Received_Time"].dt.hour
-    hourly_counts = hourly_df.groupby(["Hour", "Department"]).size().reset_index(name="Count")
-    if not hourly_counts.empty:
-        fig = px.bar(hourly_counts, x="Hour", y="Count", color="Department", barmode="group", text="Count")
-        fig.update_layout(height=300, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, use_container_width=True)
+# Top Contributors
+st.markdown('<div class="section-header">🏆 Top Contributors</div>', unsafe_allow_html=True)
+top_emp = df[df["Status"] == "SUCCESS"]["Employee_Name"].value_counts().head(8).reset_index()
+if not top_emp.empty:
+    top_emp.columns = ["Employee", "Reports"]
+    fig = px.bar(top_emp, x="Reports", y="Employee", orientation="h", color="Reports", color_continuous_scale="blues", text="Reports")
+    fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig, use_container_width=True)
 
 # Failure Analysis
 fail_df = df[df["Status"] == "FAILED"]
@@ -158,28 +148,12 @@ if not fail_df.empty:
     fig = px.bar(errors, x="Count", y="Error", orientation="h", color="Count", color_continuous_scale="reds", text="Count")
     fig.update_layout(height=280, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig, use_container_width=True)
-    with st.expander("📋 Recent Failures"):
-        st.dataframe(fail_df[["Received_Time", "Sender_Name", "Employee_Name", "Reason"]].head(10), use_container_width=True, hide_index=True)
 else:
     st.success("✅ No failures recorded")
 
-# Audit Log
-st.markdown('<div class="section-header">📋 Audit Log</div>', unsafe_allow_html=True)
-f1, f2, f3 = st.columns(3)
-with f1: status_f = st.multiselect("Status", ["SUCCESS", "FAILED", "DUPLICATE"], default=["SUCCESS", "FAILED", "DUPLICATE"])
-with f2: dept_f = st.selectbox("Department", ["All"] + sorted(df["Department"].dropna().unique().tolist()))
-with f3: emp_f = st.selectbox("Employee", ["All"] + sorted(df["Employee_Name"].dropna().unique().tolist()))
-
-filtered = df.copy()
-if status_f: filtered = filtered[filtered["Status"].isin(status_f)]
-if dept_f and dept_f != "All": filtered = filtered[filtered["Department"] == dept_f]
-if emp_f and emp_f != "All": filtered = filtered[filtered["Employee_Name"] == emp_f]
-
-st.caption(f"Showing {len(filtered)} of {len(df)} entries")
-if not filtered.empty:
-    log_display = filtered[["Received_Time", "Sender_Name", "Employee_Name", "Department", "Date", "Status", "Processing_Time_Sec"]].copy()
-    log_display.columns = ["Time", "Sender", "Employee", "Dept", "Report Date", "Status", "Time(s)"]
-    log_display["Time"] = log_display["Time"].dt.strftime("%d-%b %H:%M:%S")
-    st.dataframe(log_display.sort_values("Time", ascending=False), use_container_width=True, hide_index=True)
-
-st.markdown('<div class="footer">⚡ Advanced Report Automation System · Powered by Gemini AI · Automated via GitHub Actions · Emails remain unread</div>', unsafe_allow_html=True)
+# Footer
+st.markdown("""
+<div class="footer">
+    ⚡ Report Automation System · Powered by Gemini AI · Automated via GitHub Actions · Emails remain unread
+</div>
+""", unsafe_allow_html=True)
