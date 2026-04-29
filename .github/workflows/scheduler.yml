@@ -23,17 +23,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
+        working-directory: Working_Report_Editor
         run: |
-          cd Working_Report_Editor
           pip install -r requirements.txt
 
       - name: Create logs directory
-        run: mkdir -p Working_Report_Editor/logs Working_Report_Editor/attachments
+        run: |
+          mkdir -p Working_Report_Editor/logs
+          mkdir -p Working_Report_Editor/attachments
 
       - name: Run processor
-        run: cd Working_Report_Editor && python main.py
+        working-directory: Working_Report_Editor
+        run: python main.py
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
