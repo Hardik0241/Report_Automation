@@ -16,7 +16,7 @@ try:
     SALES_SPREADSHEET_ID = st.secrets["SALES_SPREADSHEET_ID"]
     HR_SPREADSHEET_ID = st.secrets["HR_SPREADSHEET_ID"]
     GOOGLE_CREDENTIALS_DICT = dict(st.secrets["GOOGLE_CREDENTIALS"])
-    logger.info("Loaded secrets from Streamlit Cloud")
+    # LOGGER IS NOT DEFINED HERE - DO NOT USE logger.info()
 except Exception:
     # Fallback to environment variables (GitHub Actions)
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -42,7 +42,7 @@ HR_EMPLOYEES = [
 ]
 
 # ============================================================
-# EMAIL TO NAME MAPPING (For fallback when name not in body)
+# EMAIL TO NAME MAPPING
 # ============================================================
 SALES_EMAIL_MAP = {
     "apoorva.edujam@gmail.com": "Apoorva",
@@ -70,13 +70,13 @@ HR_EMAIL_MAP = {
 }
 
 # ============================================================
-# SALES DEADLINE RULE (Required by main.py)
+# SALES DEADLINE RULE
 # ============================================================
 SALES_CUTOFF_HOUR = 0
 SALES_CUTOFF_MINUTE = 0
 
 # ============================================================
-# SCHEDULER ACTIVE WINDOW (Required by scheduler.py)
+# SCHEDULER ACTIVE WINDOW
 # ============================================================
 ACTIVE_START_HOUR = 14
 ACTIVE_START_MINUTE = 30
@@ -87,7 +87,7 @@ ACTIVE_END_MINUTE = 59
 # GOOGLE SHEETS CONFIGURATION
 # ============================================================
 DATE_IN_SUBJECT_FORMAT = "%d-%m-%Y"
-SHEET_NAME_FORMAT = "%b-%Y"  # "Mar-2026", "Apr-2026"
+SHEET_NAME_FORMAT = "%b-%Y"
 
 SALES_COLUMN_MAPPING = {
     "Date": 1,
@@ -117,7 +117,7 @@ HR_HEADERS = list(HR_COLUMN_MAPPING.keys())
 # ============================================================
 # GMAIL CONFIGURATION
 # ============================================================
-GMAIL_QUERY = "is:unread"  # Fetch all unread emails (filter by sender later)
+GMAIL_QUERY = "is:unread"
 MAX_EMAILS_PER_RUN = 50
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 GMAIL_USER_ID = "me"
@@ -171,6 +171,6 @@ DUPLICATE_CACHE_PATH = f"{LOG_DIR}/duplicate_cache.json"
 DUPLICATE_WINDOW_HOURS = 24
 
 # ============================================================
-# SERVICE ACCOUNT FILE (Optional, for local use)
+# SERVICE ACCOUNT FILE
 # ============================================================
 SERVICE_ACCOUNT_FILE = "credentials.json"
