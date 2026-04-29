@@ -1,12 +1,13 @@
 """
-gmail_reader.py — Fetch unread emails (body + image attachments) from Gmail.
-READ ONLY MODE - Emails will stay UNREAD after processing.
+gmail_reader.py — Fetch unread emails from Gmail
+READ ONLY MODE - Emails stay UNREAD
 """
 
 import base64
 import hashlib
 import logging
 import os
+import re
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -14,13 +15,8 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from config import (
-    GMAIL_QUERY,
-    GMAIL_USER_ID,
-    MAX_EMAILS_PER_RUN,
-    GMAIL_SCOPES,
-)
-from error_handler import AttachmentError, EmailFetchError, with_retry
+from config import GMAIL_QUERY, GMAIL_USER_ID, MAX_EMAILS_PER_RUN, GMAIL_SCOPES
+from error_handler import EmailFetchError, with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -33,27 +29,33 @@ class GmailReader:
         os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
         self._service = None
         self._oauth_creds = None
+        # Known sales employee emails for filtering
+        self.sales_emails = [
+            "apoorva.edujam@gmail.com", "abhijit.edujam@gmail.com",
+            "sakibs.edujam@gmail.com", "jayesha.edujam@gmail.com",
+            "saifd.edujam@gmail.com", "rajeshp.edujam@gmail.com",
+            "manasvi.edujam@gmail.com", "prafulp.edujam@gmail.com",
+            "sachingodara.edujam@gmail.com", "aishwary.edujam@gmail.com",
+            "saylip.edujam@gmail.com", "dhanshree.edujam@gmail.com",
+            "muskan.edujam@gmail.com", "kalpita.edujam@gmail.com",
+            "komals.edujam@gmail.com", "siddhesh.edujam@gmail.com",
+        ]
+        self.hr_emails = [
+            "ruwaida.hredujam@gmail.com", "amanpreet.hredujam@gmail.com",
+            "mehvish.hredujam@gmail.com",
+        ]
+        self.allowed_emails = set(self.sales_emails + self.hr_emails)
 
     def _get_oauth_creds(self):
-        """Get OAuth credentials for Gmail (READ ONLY)"""
         if self._oauth_creds:
             return self._oauth_creds
 
         import os
 
-        # Try environment variables with BOTH naming conventions
-        # First try: GMAIL_ prefixed names
-        refresh_token = os.environ.get("GMAIL_REFRESH_TOKEN", "")
-        client_id = os.environ.get("GMAIL_CLIENT_ID", "")
-        client_secret = os.environ.get("GMAIL_CLIENT_SECRET", "")
-
-        # Second try: Without GMAIL_ prefix (your GitHub secret names)
-        if not refresh_token:
-            refresh_token = os.environ.get("REFRESH_TOKEN", "")
-        if not client_id:
-            client_id = os.environ.get("CLIENT_ID", "")
-        if not client_secret:
-            client_secret = os.environ.get("CLIENT_SECRET", "")
+        # Try environment variables (GitHub Actions)
+        refresh_token = os.environ.get("REFRESH_TOKEN", "")
+        client_id = os.environ.get("CLIENT_ID", "")
+        client_secret = os.environ.get("CLIENT_SECRET", "")
 
         if refresh_token and client_id and client_secret:
             self._oauth_creds = Credentials(
@@ -64,10 +66,10 @@ class GmailReader:
                 client_secret=client_secret,
                 scopes=GMAIL_SCOPES,
             )
-            logger.info("OAuth credentials loaded from environment variables")
+            logger.info("OAuth credentials loaded from environment")
             return self._oauth_creds
 
-        # Try Streamlit secrets (for Streamlit Cloud)
+        # Try Streamlit secrets
         try:
             import streamlit as st
             oauth = st.secrets.get("GOOGLE_OAUTH", {})
@@ -82,27 +84,36 @@ class GmailReader:
                 )
                 logger.info("OAuth credentials loaded from Streamlit secrets")
                 return self._oauth_creds
-        except:
+        except Exception:
             pass
 
-        raise Exception("No OAuth credentials found in secrets or environment")
+        raise Exception("No OAuth credentials found")
 
     def _get_service(self):
         if self._service:
             return self._service
-
         creds = self._get_oauth_creds()
         self._service = build("gmail", "v1", credentials=creds)
-        logger.info("Gmail service initialised (READ ONLY - emails will stay unread)")
+        logger.info("Gmail service initialised (READ ONLY)")
         return self._service
+
+    def _extract_email_address(self, from_header: str) -> str:
+        match = re.search(r'<([^>]+)>', from_header)
+        if match:
+            return match.group(1).strip().lower()
+        match = re.search(r'[\w.+-]+@[\w.-]+\.\w+', from_header)
+        if match:
+            return match.group(0).strip().lower()
+        return from_header.strip().lower()
 
     @with_retry()
     def fetch_emails(self) -> List[Dict]:
         svc = self._get_service()
+        emails = []
 
         try:
             result = svc.users().messages().list(
-                userId="me",
+                userId=GMAIL_USER_ID,
                 q=GMAIL_QUERY,
                 maxResults=MAX_EMAILS_PER_RUN,
             ).execute()
@@ -114,63 +125,65 @@ class GmailReader:
             ) from exc
 
         messages = result.get("messages", [])
-        logger.info(f"Found {len(messages)} email(s).")
+        logger.info(f"Found {len(messages)} unread email(s)")
 
-        emails = []
         for msg_stub in messages:
-            email_obj = self._process_message(svc, msg_stub["id"])
-            if email_obj:
-                emails.append(email_obj)
+            try:
+                msg = svc.users().messages().get(
+                    userId=GMAIL_USER_ID, id=msg_stub["id"], format="full"
+                ).execute()
 
+                # Extract headers
+                subject = ""
+                from_email = ""
+                for h in msg["payload"].get("headers", []):
+                    if h["name"].lower() == "subject":
+                        subject = h["value"]
+                    elif h["name"].lower() == "from":
+                        from_email = h["value"]
+
+                # Extract sender email and check if allowed
+                sender_email = self._extract_email_address(from_email)
+                if sender_email not in self.allowed_emails:
+                    logger.info(f"Skipping email from non-allowed sender: {sender_email}")
+                    # Still mark as read to avoid reprocessing
+                    try:
+                        svc.users().messages().modify(
+                            userId=GMAIL_USER_ID,
+                            id=msg_stub["id"],
+                            body={"removeLabelIds": ["UNREAD"]},
+                        ).execute()
+                    except Exception:
+                        pass
+                    continue
+
+                # Extract body and attachments
+                body_parts = []
+                att_paths = []
+                self._walk_parts(svc, msg_stub["id"], msg["payload"], body_parts, att_paths)
+                body = "\n".join(body_parts)
+
+                received_ms = int(msg.get("internalDate", 0))
+                received_at = datetime.fromtimestamp(received_ms / 1000) if received_ms else datetime.now()
+
+                emails.append({
+                    "id": msg_stub["id"],
+                    "subject": subject,
+                    "from": from_email,
+                    "sender_email": sender_email,
+                    "body": body,
+                    "attachments": att_paths,
+                    "hash": hashlib.md5(f"{msg_stub['id']}|{subject}".encode()).hexdigest(),
+                    "received_at": received_at,
+                    "received_ms": received_ms,
+                })
+
+            except Exception as e:
+                logger.error(f"Error processing message {msg_stub['id']}: {e}")
+                continue
+
+        logger.info(f"Fetched {len(emails)} emails from allowed senders")
         return emails
-
-    def _process_message(self, svc, msg_id: str) -> Optional[Dict]:
-        try:
-            msg = svc.users().messages().get(
-                userId="me", id=msg_id, format="full"
-            ).execute()
-        except HttpError as exc:
-            logger.error(f"Could not fetch message {msg_id}: {exc}")
-            return None
-
-        subject = ""
-        from_email = ""
-
-        for h in msg["payload"].get("headers", []):
-            if h["name"].lower() == "subject":
-                subject = h["value"]
-            elif h["name"].lower() == "from":
-                from_email = h["value"]
-
-        received_ms = int(msg.get("internalDate", 0))
-        received_at = (
-            datetime.fromtimestamp(received_ms / 1000)
-            if received_ms else datetime.now()
-        )
-
-        body_parts = []
-        att_paths = []
-
-        self._walk_parts(
-            svc, msg_id, msg["payload"],
-            body_ref=body_parts,
-            att_ref=att_paths
-        )
-
-        body = "\n".join(body_parts)
-
-        # IMPORTANT: No code to mark as read - emails stay UNREAD
-
-        return {
-            "id": msg_id,
-            "subject": subject,
-            "from": from_email,
-            "body": body,
-            "attachments": att_paths,
-            "hash": self._email_hash(msg_id, subject),
-            "received_at": received_at,
-            "received_ms": received_ms,
-        }
 
     def _walk_parts(self, svc, msg_id, part, body_ref, att_ref):
         mime = part.get("mimeType", "")
@@ -194,14 +207,13 @@ class GmailReader:
     def _download_attachment(self, svc, msg_id, part):
         try:
             att = svc.users().messages().attachments().get(
-                userId="me",
+                userId=GMAIL_USER_ID,
                 messageId=msg_id,
                 id=part["body"]["attachmentId"]
             ).execute()
 
             raw = base64.urlsafe_b64decode(att["data"])
             filename = part["filename"]
-
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             safe_name = f"{timestamp}_{filename}"
             path = os.path.join(ATTACHMENTS_DIR, safe_name)
@@ -209,12 +221,9 @@ class GmailReader:
             with open(path, "wb") as fh:
                 fh.write(raw)
 
+            logger.info(f"Downloaded attachment: {safe_name}")
             return path
 
         except Exception as exc:
             logger.error(f"Attachment download failed: {exc}")
             return None
-
-    @staticmethod
-    def _email_hash(msg_id: str, subject: str) -> str:
-        return hashlib.md5(f"{msg_id}|{subject}".encode()).hexdigest()
