@@ -18,6 +18,7 @@ from config import GEMINI_API_KEY, GEMINI_MODEL
 from error_handler import with_retry
 from utils import coerce_int
 
+print("DEBUG: main.py is running", flush=True)
 logger = logging.getLogger(__name__)
 
 genai.configure(api_key=GEMINI_API_KEY)
