@@ -72,7 +72,8 @@ with st.sidebar:
     st.markdown("### 📅 Schedule Info")
     st.info("Active Window: 2:30 PM - 11:59 PM | Runs every 20 minutes via GitHub Actions")
     st.markdown("---")
-    st.caption("📊 Report Automation System | Powered by Gemini AI")
+    st.caption("📊 Report Automation System")
+    st.caption("Powered by Gemini AI")
 
 # Main Header
 st.markdown("""
