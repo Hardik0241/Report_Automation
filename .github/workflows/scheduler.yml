@@ -5,13 +5,10 @@ env:
 
 on:
   schedule:
-    # Every 20 minutes from 09:00 to 18:20 UTC (2:30 PM to 11:59 PM IST)
-    # UTC is 5 hours 30 minutes behind IST
-    # IST 2:30 PM = UTC 09:00
-    # IST 11:59 PM = UTC 18:29
+    # Every 20 minutes from 09:00 to 18:20 UTC (2:30 PM to 11:50 PM IST)
     - cron: '*/20 9-18 * * *'
-    # Final run at 18:20 UTC (11:50 PM IST) - last run before cutoff
-    - cron: '20 18 * * *'
+    # Final run at 18:30 UTC (12:00 AM IST midnight) - marks "Not Sent"
+    - cron: '30 18 * * *'
   workflow_dispatch:
 
 jobs:
