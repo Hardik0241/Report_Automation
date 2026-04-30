@@ -16,7 +16,6 @@ try:
     SALES_SPREADSHEET_ID = st.secrets["SALES_SPREADSHEET_ID"]
     HR_SPREADSHEET_ID = st.secrets["HR_SPREADSHEET_ID"]
     GOOGLE_CREDENTIALS_DICT = dict(st.secrets["GOOGLE_CREDENTIALS"])
-    # LOGGER IS NOT DEFINED HERE - DO NOT USE logger.info()
 except Exception:
     # Fallback to environment variables (GitHub Actions)
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
@@ -70,6 +69,17 @@ HR_EMAIL_MAP = {
 }
 
 # ============================================================
+# Build Gmail Query with specific senders (IMPORTANT FIX!)
+# ============================================================
+ALL_SALES_EMAILS = list(SALES_EMAIL_MAP.keys())
+ALL_HR_EMAILS = list(HR_EMAIL_MAP.keys())
+ALL_ALLOWED_EMAILS = ALL_SALES_EMAILS + ALL_HR_EMAILS
+
+# Create query: from:(email1 OR email2) AND is:unread
+FROM_QUERY = " OR ".join([f"from:{email}" for email in ALL_ALLOWED_EMAILS])
+GMAIL_QUERY = f"({FROM_QUERY}) is:unread"
+
+# ============================================================
 # SALES DEADLINE RULE
 # ============================================================
 SALES_CUTOFF_HOUR = 0
@@ -117,7 +127,6 @@ HR_HEADERS = list(HR_COLUMN_MAPPING.keys())
 # ============================================================
 # GMAIL CONFIGURATION
 # ============================================================
-GMAIL_QUERY = "is:unread"
 MAX_EMAILS_PER_RUN = 50
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 GMAIL_USER_ID = "me"
