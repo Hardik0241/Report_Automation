@@ -178,7 +178,7 @@ env/
 # IDE settings
 .vscode/
 
-# Logs and runtime data - MODIFIED: Ignore logs folder but keep the CSV file
+# Logs and runtime data - MODIFIED: Ignore logs folder EXCEPT processing_logs.csv
 logs/
 !logs/processing_logs.csv
 attachments/
