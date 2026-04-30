@@ -29,22 +29,6 @@ class GmailReader:
         os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
         self._service = None
         self._oauth_creds = None
-        # Known sales employee emails for filtering
-        self.sales_emails = [
-            "apoorva.edujam@gmail.com", "abhijit.edujam@gmail.com",
-            "sakibs.edujam@gmail.com", "jayesha.edujam@gmail.com",
-            "saifd.edujam@gmail.com", "rajeshp.edujam@gmail.com",
-            "manasvi.edujam@gmail.com", "prafulp.edujam@gmail.com",
-            "sachingodara.edujam@gmail.com", "aishwary.edujam@gmail.com",
-            "saylip.edujam@gmail.com", "dhanshree.edujam@gmail.com",
-            "muskan.edujam@gmail.com", "kalpita.edujam@gmail.com",
-            "komals.edujam@gmail.com", "siddhesh.edujam@gmail.com",
-        ]
-        self.hr_emails = [
-            "ruwaida.hredujam@gmail.com", "amanpreet.hredujam@gmail.com",
-            "mehvish.hredujam@gmail.com",
-        ]
-        self.allowed_emails = set(self.sales_emails + self.hr_emails)
 
     def _get_oauth_creds(self):
         if self._oauth_creds:
@@ -125,7 +109,8 @@ class GmailReader:
             ) from exc
 
         messages = result.get("messages", [])
-        logger.info(f"Found {len(messages)} unread email(s)")
+        logger.info(f"Found {len(messages)} unread email(s) from allowed senders")
+        print(f"DEBUG: Gmail API returned {len(messages)} messages", flush=True)
 
         for msg_stub in messages:
             try:
@@ -142,20 +127,8 @@ class GmailReader:
                     elif h["name"].lower() == "from":
                         from_email = h["value"]
 
-                # Extract sender email and check if allowed
                 sender_email = self._extract_email_address(from_email)
-                if sender_email not in self.allowed_emails:
-                    logger.info(f"Skipping email from non-allowed sender: {sender_email}")
-                    # Still mark as read to avoid reprocessing
-                    try:
-                        svc.users().messages().modify(
-                            userId=GMAIL_USER_ID,
-                            id=msg_stub["id"],
-                            body={"removeLabelIds": ["UNREAD"]},
-                        ).execute()
-                    except Exception:
-                        pass
-                    continue
+                print(f"DEBUG: Processing email from: {sender_email}", flush=True)
 
                 # Extract body and attachments
                 body_parts = []
@@ -178,11 +151,13 @@ class GmailReader:
                     "received_ms": received_ms,
                 })
 
+                logger.info(f"Successfully fetched email from: {sender_email}")
+
             except Exception as e:
                 logger.error(f"Error processing message {msg_stub['id']}: {e}")
                 continue
 
-        logger.info(f"Fetched {len(emails)} emails from allowed senders")
+        logger.info(f"Fetched {len(emails)} email(s) total")
         return emails
 
     def _walk_parts(self, svc, msg_id, part, body_ref, att_ref):
