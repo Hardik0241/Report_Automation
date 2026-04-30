@@ -1,5 +1,6 @@
 """
-sheets_service.py — Google Sheets operations with proper batch writing
+sheets_service.py — Google Sheets operations with Calibri font, size 13, center alignment
+Handles: Not Sent (no email), Invalid Report (screenshot mismatch), and actual data
 """
 
 import logging
@@ -54,6 +55,8 @@ class SheetsService:
         self._sales_ss = client.open_by_key(SALES_SPREADSHEET_ID)
         self._hr_ss = client.open_by_key(HR_SPREADSHEET_ID)
         logger.info("Connected to Sales and HR spreadsheets")
+        self._emp_cache: Dict[Tuple[str, str], Dict[str, int]] = {}
+        self._ws_cache: Dict[Tuple[str, str], gspread.Worksheet] = {}
 
     def _spreadsheet(self, department: str):
         return self._sales_ss if department == "Sales" else self._hr_ss
@@ -79,12 +82,19 @@ class SheetsService:
             logger.warning(f"Formatting failed: {e}")
 
     def _get_worksheet(self, department: str, date_str: str) -> gspread.Worksheet:
+        key = (department, date_str)
+        if key in self._ws_cache:
+            return self._ws_cache[key]
+
         ss = self._spreadsheet(department)
         name = self.sheet_name(date_str)
         try:
-            return ss.worksheet(name)
+            ws = ss.worksheet(name)
         except gspread.WorksheetNotFound:
-            return self._create_worksheet(ss, name, department)
+            ws = self._create_worksheet(ss, name, department)
+
+        self._ws_cache[key] = ws
+        return ws
 
     def _create_worksheet(self, ss: gspread.Spreadsheet, name: str, department: str) -> gspread.Worksheet:
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
@@ -104,7 +114,9 @@ class SheetsService:
         has_date = set()
         for row in all_values[1:]:
             if row and row[0].strip() == date_str:
-                has_date.add(row[1].strip() if len(row) > 1 else "")
+                name = row[1].strip() if len(row) > 1 else ""
+                if name:
+                    has_date.add(name)
         updates = []
         for emp in employees:
             if emp not in has_date:
@@ -126,7 +138,6 @@ class SheetsService:
 
     @with_retry()
     def write_batch(self, department: str, date_str: str, updates: List[Tuple[int, Dict]]) -> None:
-        """Batch write multiple rows - CRITICAL FIX"""
         if not updates:
             return
         ws = self._get_worksheet(department, date_str)
@@ -154,36 +165,83 @@ class SheetsService:
 
     @with_retry()
     def mark_not_sent(self, department: str, date_str: str) -> None:
-        """ONLY mark as 'Not Sent' at the END of the day, not during processing"""
+        """Mark employees who didn't submit any report by deadline"""
         if department != "Sales":
             return
+
         ws = self._get_worksheet(department, date_str)
         employees = SALES_EMPLOYEES
         mapping = SALES_COLUMN_MAPPING
+
         first_data_col = min(col for field, col in mapping.items() if field not in ("Date", "Employee Name"))
         all_values = ws.get_all_values()
         updates = []
+
         for emp in employees:
             row_num = None
             for i, row in enumerate(all_values[1:], start=2):
                 if row and row[0].strip() == date_str and row[1].strip().lower() == emp.lower():
                     row_num = i
                     break
+
             if not row_num:
                 continue
+
             has_data = False
             for field, col in mapping.items():
                 if field not in ("Date", "Employee Name"):
                     if col - 1 < len(all_values[row_num - 1]) and all_values[row_num - 1][col - 1].strip():
                         has_data = True
                         break
+
             if not has_data:
                 col_letter = gspread.utils.rowcol_to_a1(row_num, first_data_col).rstrip("0123456789")
                 updates.append({"range": f"{col_letter}{row_num}", "values": [["Not Sent"]]})
+
         if updates:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
             self._apply_formatting(ws)
-            logger.info(f"Marked {len(updates)} employee(s) as 'Not Sent'")
+            logger.info(f"Marked {len(updates)} employee(s) as 'Not Sent' for {date_str}")
+
+    @with_retry()
+    def mark_invalid_report(self, department: str, date_str: str, employee_name: str) -> None:
+        """Mark a specific employee's report as 'Invalid Report' when screenshot validation fails"""
+        if department != "Sales":
+            return
+
+        ws = self._get_worksheet(department, date_str)
+        mapping = SALES_COLUMN_MAPPING
+        first_data_col = min(col for field, col in mapping.items() if field not in ("Date", "Employee Name"))
+
+        all_values = ws.get_all_values()
+        row_num = None
+
+        for i, row in enumerate(all_values[1:], start=2):
+            row_date = row[0].strip() if len(row) > 0 else ""
+            row_name = row[1].strip() if len(row) > 1 else ""
+            if row_date == date_str and row_name.lower() == employee_name.lower():
+                row_num = i
+                break
+
+        if not row_num:
+            logger.warning(f"Row not found for {employee_name} on {date_str}")
+            return
+
+        col_letter = gspread.utils.rowcol_to_a1(row_num, first_data_col).rstrip("0123456789")
+        ws.update(f"{col_letter}{row_num}", [["Invalid Report"]], value_input_option="USER_ENTERED")
+        self._apply_formatting(ws)
+        logger.info(f"Marked {employee_name} as 'Invalid Report' for {date_str}")
 
     def list_sheets(self, department: str) -> List[str]:
         return [ws.title for ws in self._spreadsheet(department).worksheets()]
+
+    def get_employees_for_date(self, department: str, date_str: str) -> Dict[str, int]:
+        ws = self._get_worksheet(department, date_str)
+        all_values = ws.get_all_values()
+        emp_rows = {}
+        for i, row in enumerate(all_values[1:], start=2):
+            row_date = row[0].strip() if len(row) > 0 else ""
+            row_name = row[1].strip() if len(row) > 1 else ""
+            if row_date == date_str and row_name:
+                emp_rows[row_name] = i
+        return emp_rows
