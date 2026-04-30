@@ -1,5 +1,5 @@
 """
-main.py — Production pipeline orchestrator with debug prints
+main.py — Production pipeline orchestrator with Invalid Report marking on screenshot mismatch
 """
 
 import logging
@@ -122,6 +122,7 @@ class ReportProcessor:
             if not ok:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
+            # Screenshot validation for Sales department
             if dept == "Sales":
                 screenshot_data = None
                 for att in attachments:
@@ -129,6 +130,7 @@ class ReportProcessor:
                         screenshot_data = self.vision.parse_screenshot(att)
                         if screenshot_data:
                             break
+
                 if not screenshot_data:
                     return _fail("Sales report requires screenshot", dept=dept, emp=canonical_name, date=date_str)
 
@@ -146,15 +148,19 @@ class ReportProcessor:
                 if email_connected != screen_connected:
                     mismatches.append(f"Connected: email={email_connected}, screenshot={screen_connected}")
                 if email_duration != screen_duration:
-                    mismatches.append(f"Duration: email={email_duration}, screenshot={screen_duration}")
+                    mismatches.append(f"Duration: email={email_duration}, screenshot={screen_duration})
 
                 if mismatches:
+                    # Mark as "Invalid Report" in Google Sheets before failing
+                    self.sheets.mark_invalid_report(dept, date_str, canonical_name)
                     return _fail(f"Screenshot mismatch: {' | '.join(mismatches)}", dept=dept, emp=canonical_name, date=date_str)
 
                 logger.info("Sales report validated successfully")
 
+            # Ensure sheet rows exist and write data
             self.sheets.ensure_date_for_all_employees(dept, date_str)
             row_num = self.sheets.find_employee_row(dept, date_str, canonical_name)
+
             if not row_num:
                 return _fail(f"Row not found for {canonical_name}", dept=dept, emp=canonical_name, date=date_str)
 
