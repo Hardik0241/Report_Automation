@@ -148,7 +148,7 @@ class ReportProcessor:
                 if email_connected != screen_connected:
                     mismatches.append(f"Connected: email={email_connected}, screenshot={screen_connected}")
                 if email_duration != screen_duration:
-                    mismatches.append(f"Duration: email={email_duration}, screenshot={screen_duration})
+                    mismatches.append(f"Duration: email={email_duration}, screenshot={screen_duration}")
 
                 if mismatches:
                     # Mark as "Invalid Report" in Google Sheets before failing
