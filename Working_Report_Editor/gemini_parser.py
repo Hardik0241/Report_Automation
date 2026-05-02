@@ -1,12 +1,5 @@
 """
 gemini_parser.py — Parse email body into structured data using Gemini.
-
-Key changes vs previous version:
-  • Flexible keyword matching for field names (dial, conn, pros, dur, etc.)
-  • Handles missing ':' separator between field name and value
-  • Flexible duration parsing (1hr, 1h 20m, 20m 45sec, etc.)
-  • Name/department are OPTIONAL — pipeline falls back to sender email map
-  • Regex fallback covers all messy real-world formats
 """
 
 import json
@@ -18,7 +11,7 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
 import google.generativeai as genai
 
-from config import DEPARTMENT_KEYWORDS, GEMINI_API_KEY, GEMINI_MODEL
+from config import GEMINI_API_KEY, GEMINI_MODEL
 from error_handler import with_retry
 from utils import coerce_int, normalize_employee_name, parse_duration, safe_title
 
@@ -31,23 +24,22 @@ You are a data extraction assistant. Extract information from this daily work-re
 
 Return ONLY a JSON object — no markdown, no explanation.
 
-IMPORTANT: The sender may use informal/short names for fields. Map them as follows:
-- "total dials", "total dial", "dials", "total calls", "calls made" → "Total Dialed" (Sales) or "Total Calls" (HR)
-- "connected", "conn", "cnct", "total connected", "connected calls" → "Total Connected" (Sales) or "Connected Calls" (HR)
-- "duration", "dur", "time", "talk time", "call time", "total time" → "Duration"
-- "prospect", "prospects", "pros", "prspct" → "Prospect"
-- "interview lineups", "lineups", "tomorrow lineups" → "Tomorrow Interview Lineups"
-- "interview held", "interviews held", "held" → "Interview Held"
+IMPORTANT: First determine if this is a SALES or HR report based on content.
 
-Duration may be written as: "1hr", "1h 20m", "20m 45sec", "1:20:45", "00:36:35", "36:35", etc.
-Always convert duration to HH:MM:SS format.
+For a SALES report, look for:
+- "total dialed", "total dial", "dials", "total calls", "calls made"
+- "connected", "conn", "total connected", "connected calls"  
+- "duration", "dur", "talk time"
+- "prospect", "prospects"
 
-The field name and value may be separated by ":", "=", "-", " " or nothing at all.
-Example: "Total Dials 42" or "Dials:42" or "Dials = 42" — all are valid.
+For an HR report, look for:
+- "interview", "recruitment", "candidate", "screening", "lineup"
+- "interview held", "interviews held", "held"
+- "tomorrow interview lineups", "lineups"
 
-For a SALES report:
+For SALES report:
 {
-  "employee_name": "string or empty string if not found",
+  "employee_name": "string or empty",
   "department": "Sales",
   "Total Dialed": integer,
   "Total Connected": integer,
@@ -55,9 +47,9 @@ For a SALES report:
   "Prospect": integer
 }
 
-For an HR report:
+For HR report:
 {
-  "employee_name": "string or empty string if not found",
+  "employee_name": "string or empty",
   "department": "HR",
   "Total Calls": integer,
   "Connected Calls": integer,
@@ -67,10 +59,10 @@ For an HR report:
 }
 
 Rules:
-- Use 0 for any missing integer field.
+- Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
-- If you cannot determine the department, use "Unknown".
-- If you cannot find the employee name, use an empty string "".
+- If the email is about calls/dialer numbers → Sales
+- If the email is about interviews/recruitment → HR
 
 Email content:
 """
@@ -80,13 +72,8 @@ class GeminiParser:
     def __init__(self):
         self.model = genai.GenerativeModel(GEMINI_MODEL)
 
-    # ──────────────────────────────────────
-    # Public
-    # ──────────────────────────────────────
-
     @with_retry()
     def parse_email(self, body: str) -> Optional[Dict]:
-        """Parse email body. Returns cleaned dict or None on hard failure."""
         if not body or not body.strip():
             logger.warning("Empty email body — skipping Gemini call.")
             return None
@@ -96,7 +83,7 @@ class GeminiParser:
         try:
             response = self.model.generate_content(prompt)
             raw_text = response.text.strip()
-            data     = self._extract_json(raw_text)
+            data = self._extract_json(raw_text)
         except Exception as exc:
             logger.warning(f"Gemini call failed ({exc}); trying regex fallback.")
             data = None
@@ -110,13 +97,9 @@ class GeminiParser:
 
         return self._clean(data, body)
 
-    # ──────────────────────────────────────
-    # JSON extraction
-    # ──────────────────────────────────────
-
     @staticmethod
     def _extract_json(text: str) -> Optional[Dict]:
-        text  = re.sub(r"```(?:json)?", "", text).strip()
+        text = re.sub(r"```(?:json)?", "", text).strip()
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if not match:
             return None
@@ -125,18 +108,12 @@ class GeminiParser:
         except json.JSONDecodeError:
             return None
 
-    # ──────────────────────────────────────
-    # Cleaning / normalisation
-    # ──────────────────────────────────────
-
     def _clean(self, data: Dict, original_body: str) -> Dict:
-        # Department: validate + fallback to keyword detection
         dept = data.get("department", "")
         if dept not in ("Sales", "HR"):
             dept = self._detect_department(original_body)
         data["department"] = dept
 
-        # Employee name — optional, normalise if present
         raw_name = data.get("employee_name", "") or ""
         data["employee_name"] = normalize_employee_name(raw_name)
 
@@ -144,13 +121,11 @@ class GeminiParser:
             for field in ["Total Dialed", "Total Connected", "Prospect"]:
                 data[field] = coerce_int(data.get(field, 0))
             data["Duration"] = parse_duration(data.get("Duration", ""))
-            for k in ["Total Calls", "Connected Calls",
-                      "Tomorrow Interview Lineups", "Interview Held"]:
+            for k in ["Total Calls", "Connected Calls", "Tomorrow Interview Lineups", "Interview Held"]:
                 data.pop(k, None)
 
         elif dept == "HR":
-            for field in ["Total Calls", "Connected Calls",
-                          "Tomorrow Interview Lineups", "Interview Held"]:
+            for field in ["Total Calls", "Connected Calls", "Tomorrow Interview Lineups", "Interview Held"]:
                 data[field] = coerce_int(data.get(field, 0))
             data["Duration"] = parse_duration(data.get("Duration", ""))
             for k in ["Total Dialed", "Total Connected", "Prospect"]:
@@ -161,36 +136,32 @@ class GeminiParser:
     @staticmethod
     def _detect_department(text: str) -> str:
         t = text.lower()
-        for dept, keywords in DEPARTMENT_KEYWORDS.items():
-            if any(kw in t for kw in keywords):
-                return dept
+        
+        # Check HR keywords FIRST (priority)
+        hr_keywords = ["hr", "recruitment", "interview", "hiring", "lineup", "candidate", "screening", "interview held", "tomorrow interview"]
+        for kw in hr_keywords:
+            if kw in t:
+                logger.info(f"Department detected: HR (keyword: '{kw}')")
+                return "HR"
+        
+        # Then check Sales keywords
+        sales_keywords = ["sales", "callyzer", "dialer", "prospect", "dialed", "dial", "outgoing", "total dialed", "total connected", "connected calls", "duration"]
+        for kw in sales_keywords:
+            if kw in t:
+                logger.info(f"Department detected: Sales (keyword: '{kw}')")
+                return "Sales"
+        
+        logger.info("Department detection: Unknown (no keywords found)")
         return "Unknown"
 
-    # ──────────────────────────────────────
-    # Flexible regex fallback
-    # ──────────────────────────────────────
-
     def _fallback_parse(self, text: str) -> Optional[Dict]:
-        """
-        Flexible regex fallback that handles:
-          - Missing ':' separator
-          - Short keywords: dial, conn, pros, dur
-          - Any order of fields
-          - Various duration formats
-        """
         dept = self._detect_department(text)
-        dur  = self._extract_duration_flexible(text)
+        dur = self._extract_duration_flexible(text)
         name = self._extract_name(text)
 
         def grab(keywords: list) -> int:
-            """
-            Find first number that appears after any keyword.
-            Separator between keyword and number can be: : = - . space (or missing).
-            """
             for kw in keywords:
-                # Escape the keyword for regex use
                 kw_esc = re.escape(kw)
-                # Allow optional separator chars and whitespace between keyword and number
                 pattern = rf"(?i){kw_esc}\s*[:\-=.]?\s*(\d+)"
                 match = re.search(pattern, text)
                 if match:
@@ -199,77 +170,46 @@ class GeminiParser:
 
         if dept == "Sales":
             return {
-                "employee_name":   name,
-                "department":      "Sales",
-                "Total Dialed":    grab([
-                    "total dial", "total dials", "total dialed",
-                    "total calls", "calls made", "dials", "dial",
-                ]),
-                "Total Connected": grab([
-                    "total connected", "connected calls",
-                    "connected", "conn", "cnct",
-                ]),
+                "employee_name": name,
+                "department": "Sales",
+                "Total Dialed": grab(["total dial", "total dials", "total dialed", "total calls", "calls made", "dials"]),
+                "Total Connected": grab(["total connected", "connected calls", "connected"]),
                 "Duration": dur,
-                "Prospect": grab([
-                    "prospect", "prospects", "pros", "prspct",
-                ]),
+                "Prospect": grab(["prospect", "prospects"]),
             }
 
         elif dept == "HR":
             return {
-                "employee_name":              name,
-                "department":                 "HR",
-                "Total Calls":                grab([
-                    "total calls", "total dial", "dials", "calls",
-                ]),
-                "Connected Calls":            grab([
-                    "connected calls", "connected", "conn", "cnct",
-                ]),
-                "Duration":                   dur,
-                "Tomorrow Interview Lineups": grab([
-                    "tomorrow interview lineups", "interview lineups",
-                    "tomorrow lineups", "lineups",
-                ]),
-                "Interview Held":             grab([
-                    "interview held", "interviews held", "held",
-                ]),
+                "employee_name": name,
+                "department": "HR",
+                "Total Calls": grab(["total calls", "calls", "total dial"]),
+                "Connected Calls": grab(["connected calls", "connected"]),
+                "Duration": dur,
+                "Tomorrow Interview Lineups": grab(["tomorrow interview lineups", "interview lineups", "tomorrow lineups", "lineups"]),
+                "Interview Held": grab(["interview held", "interviews held", "held"]),
             }
 
         return None
 
     @staticmethod
     def _extract_name(text: str) -> str:
-        """Best-effort name extraction from first non-empty, non-numeric line."""
         for line in text.splitlines():
             line = line.strip()
-            # Skip lines that look like field:value pairs or are just numbers
             if 2 < len(line) < 50 and not re.search(r'\d{2,}', line):
-                if not re.search(r'[:=\-]', line):   # skip field:value lines
-                    return line
+                if not re.search(r'[:=\-]', line):
+                    if not any(word in line.lower() for word in ['dear', 'hi', 'hello', 'kindly', 'please', 'report', 'calling']):
+                        return line
         return ""
 
     @staticmethod
     def _extract_duration_flexible(text: str) -> str:
-        """
-        Extract duration from text using the flexible parse_duration function.
-        Tries multiple patterns in priority order.
-        """
-        # Priority 1: HH:MM:SS
         m = re.search(r'\b(\d{1,3}:\d{2}:\d{2})\b', text)
         if m:
             return parse_duration(m.group(1))
-
-        # Priority 2: Xh Ym Zs verbose format
-        m = re.search(
-            r'(\d+\s*h(?:r|rs|our|ours)?\s*\d*\s*m?(?:in|ins)?\s*\d*\s*s?(?:ec|ecs)?)',
-            text, re.IGNORECASE
-        )
+        m = re.search(r'(\d+\s*h(?:r|rs)?\s*\d*\s*m(?:in|ins)?\s*\d*\s*s(?:ec|ecs)?)', text, re.IGNORECASE)
         if m:
             return parse_duration(m.group(1))
-
-        # Priority 3: MM:SS
         m = re.search(r'\b(\d{1,3}:\d{2})\b', text)
         if m:
             return parse_duration(m.group(1))
-
         return "00:00:00"
