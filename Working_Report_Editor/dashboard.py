@@ -1,6 +1,6 @@
 """
 dashboard.py — Report Automation Dashboard
-Manual Refresh Only
+Shows real-time data from processing logs
 """
 
 import os
@@ -32,8 +32,9 @@ div[data-testid="stMetric"] .stMetricValue { color: #ffffff !important; }
 """, unsafe_allow_html=True)
 
 
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=30)
 def load_logs() -> pd.DataFrame:
+    """Load processing logs from CSV file"""
     path = "logs/processing_logs.csv"
     if not os.path.exists(path):
         return pd.DataFrame(columns=[
@@ -70,10 +71,9 @@ with st.sidebar:
     st.metric("HR Team", len(HR_EMPLOYEES))
     st.markdown("---")
     st.markdown("### 📅 Schedule Info")
-    st.info("Active Window: 2:30 PM - 11:59 PM | Runs every 20 minutes via GitHub Actions")
+    st.info("Active Window: 7:00 PM - 11:59 PM | Runs every 30 minutes via GitHub Actions")
     st.markdown("---")
-    st.caption("📊 Report Automation System")
-    st.caption("Powered by Gemini AI")
+    st.caption("📊 Report Automation System | Powered by Gemini AI")
 
 # Main Header
 st.markdown("""
@@ -121,36 +121,6 @@ if not trend.empty:
     fig = px.bar(trend, x="Date", y="Count", color="Status", color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444"}, text="Count")
     fig.update_layout(height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig, use_container_width=True)
-
-# Department Distribution
-st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
-dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
-if not dept_data.empty:
-    dept_data.columns = ["Department", "Count"]
-    fig = px.pie(dept_data, names="Department", values="Count", color="Department", color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"}, hole=0.4)
-    fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
-
-# Top Contributors
-st.markdown('<div class="section-header">🏆 Top Contributors</div>', unsafe_allow_html=True)
-top_emp = df[df["Status"] == "SUCCESS"]["Employee_Name"].value_counts().head(8).reset_index()
-if not top_emp.empty:
-    top_emp.columns = ["Employee", "Reports"]
-    fig = px.bar(top_emp, x="Reports", y="Employee", orientation="h", color="Reports", color_continuous_scale="blues", text="Reports")
-    fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
-
-# Failure Analysis
-fail_df = df[df["Status"] == "FAILED"]
-if not fail_df.empty:
-    st.markdown('<div class="section-header">⚠️ Failure Analysis</div>', unsafe_allow_html=True)
-    errors = fail_df["Reason"].str[:80].value_counts().head(8).reset_index()
-    errors.columns = ["Error", "Count"]
-    fig = px.bar(errors, x="Count", y="Error", orientation="h", color="Count", color_continuous_scale="reds", text="Count")
-    fig.update_layout(height=280, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.success("✅ No failures recorded")
 
 # Footer
 st.markdown("""
