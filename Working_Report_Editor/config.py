@@ -99,6 +99,7 @@ ACTIVE_END_MINUTE = 59
 DATE_IN_SUBJECT_FORMAT = "%d-%m-%Y"
 SHEET_NAME_FORMAT = "%b-%Y"
 
+# UPDATED: Added "Report Status" column for both Sales and HR
 SALES_COLUMN_MAPPING = {
     "Date": 1,
     "Employee Name": 2,
@@ -109,6 +110,7 @@ SALES_COLUMN_MAPPING = {
     "Ref Added": 7,
     "status Viewed": 8,
     "Document Collected": 9,
+    "Report Status": 10,  # Column J - NEW
 }
 
 HR_COLUMN_MAPPING = {
@@ -119,6 +121,7 @@ HR_COLUMN_MAPPING = {
     "Duration": 5,
     "Tomorrow Interview Lineups": 6,
     "Interview Held": 7,
+    "Report Status": 8,  # Column H - NEW
 }
 
 SALES_HEADERS = list(SALES_COLUMN_MAPPING.keys())
