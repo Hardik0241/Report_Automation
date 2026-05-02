@@ -1,6 +1,6 @@
 """
 sheets_service.py — Google Sheets operations with Calibri font, size 13, center alignment
-Handles: Not Sent (no email), Invalid Report (screenshot mismatch), and actual data
+Handles: Not Sent (no email), Invalid Report (screenshot mismatch), actual data, and Status column
 """
 
 import logging
@@ -81,6 +81,20 @@ class SheetsService:
         except Exception as e:
             logger.warning(f"Formatting failed: {e}")
 
+    def _ensure_status_column(self, ws: gspread.Worksheet, department: str) -> None:
+        """Ensure 'Report Status' column exists in the sheet header"""
+        try:
+            headers = ws.row_values(1)
+            status_column_name = "Report Status"
+            
+            if status_column_name not in headers:
+                # Find the last column index
+                last_col = len(headers) + 1
+                ws.update_cell(1, last_col, status_column_name)
+                logger.info(f"Added 'Report Status' column to {ws.title}")
+        except Exception as e:
+            logger.warning(f"Could not ensure status column: {e}")
+
     def _get_worksheet(self, department: str, date_str: str) -> gspread.Worksheet:
         key = (department, date_str)
         if key in self._ws_cache:
@@ -93,6 +107,9 @@ class SheetsService:
         except gspread.WorksheetNotFound:
             ws = self._create_worksheet(ss, name, department)
 
+        # Ensure status column exists
+        self._ensure_status_column(ws, department)
+        
         self._ws_cache[key] = ws
         return ws
 
@@ -210,9 +227,23 @@ class SheetsService:
             return
 
         ws = self._get_worksheet(department, date_str)
-        mapping = SALES_COLUMN_MAPPING
-        first_data_col = min(col for field, col in mapping.items() if field not in ("Date", "Employee Name"))
-
+        
+        # First ensure the status column exists
+        self._ensure_status_column(ws, department)
+        
+        # Find the status column index
+        headers = ws.row_values(1)
+        status_col = None
+        for i, header in enumerate(headers, start=1):
+            if header == "Report Status":
+                status_col = i
+                break
+        
+        if status_col is None:
+            # Status column not found, add it at the end
+            status_col = len(headers) + 1
+            ws.update_cell(1, status_col, "Report Status")
+        
         all_values = ws.get_all_values()
         row_num = None
 
@@ -227,10 +258,11 @@ class SheetsService:
             logger.warning(f"Row not found for {employee_name} on {date_str}")
             return
 
-        col_letter = gspread.utils.rowcol_to_a1(row_num, first_data_col).rstrip("0123456789")
-        ws.update(f"{col_letter}{row_num}", [["Invalid Report"]], value_input_option="USER_ENTERED")
+        # Update the status column only (not overwriting data)
+        col_letter = gspread.utils.rowcol_to_a1(row_num, status_col).rstrip("0123456789")
+        ws.update(f"{col_letter}{row_num}", [["Invalid"]], value_input_option="USER_ENTERED")
         self._apply_formatting(ws)
-        logger.info(f"Marked {employee_name} as 'Invalid Report' for {date_str}")
+        logger.info(f"Marked {employee_name} as 'Invalid' for {date_str}")
 
     def list_sheets(self, department: str) -> List[str]:
         return [ws.title for ws in self._spreadsheet(department).worksheets()]
