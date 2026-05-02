@@ -1,6 +1,6 @@
 """
 main.py — Production pipeline orchestrator
-Date = Received date for BOTH Sales and HR
+Always writes email body values, adds Report Status column
 """
 
 import logging
@@ -52,19 +52,16 @@ class ReportProcessor:
         """Match sender email to department and return (department, employee_name)."""
         sender_lower = sender_email.lower()
         
-        # Check Sales map (case-insensitive)
         for email, name in SALES_EMAIL_MAP.items():
             if email.lower() == sender_lower:
                 logger.info(f"✅ Matched Sales employee: {name} via email: {email}")
                 return ("Sales", name)
         
-        # Check HR map (case-insensitive)
         for email, name in HR_EMAIL_MAP.items():
             if email.lower() == sender_lower:
                 logger.info(f"✅ Matched HR employee: {name} via email: {email}")
                 return ("HR", name)
         
-        # No match found
         logger.warning(f"❌ No department match for sender email: {sender_email}")
         return (None, None)
 
@@ -72,7 +69,6 @@ class ReportProcessor:
         t0 = time.time()
         email_id = email.get("id", "")
         
-        # Skip if already processed in this run
         if email_id in PROCESSED_EMAILS:
             logger.info(f"Skipping already processed email: {email_id}")
             return {"status": "SKIPPED", "reason": "Already processed"}
@@ -87,7 +83,6 @@ class ReportProcessor:
         received_ms = email.get("received_ms", 0)
         preview = (subject or body)[:120]
 
-        # Debug: Log sender email being processed
         logger.info(f"📧 Processing email from sender: '{sender_email}'")
 
         def _fail(reason: str, dept="", emp="", date="") -> Dict:
@@ -112,30 +107,25 @@ class ReportProcessor:
             logger.info(f"SUCCESS — {dept} / {emp} / {date_str} [{elapsed:.1f}s]")
             return {"status": "SUCCESS", "department": dept, "employee": emp, "date": date_str}
 
-        # Duplicate check
         if self.tracker.is_duplicate(email_hash):
             self.tracker.log_status(preview, "DUPLICATE", email_id, processing_time=time.time() - t0)
             logger.info(f"DUPLICATE skipped: {subject}")
             return {"status": "DUPLICATE"}
 
         try:
-            # Parse email body for values (not for department/name)
             email_data = self.parser.parse_email(body)
             if not email_data:
                 return _fail("Email body parsing failed")
 
             print(f"DEBUG: parsed email_data = {email_data}", flush=True)
 
-            # Determine department from sender email map (case-insensitive)
             dept, canonical_name = self._match_sender_to_department(sender_email)
             
             if dept is None:
-                # Fallback to body detection
                 dept = email_data.get("department", "Unknown")
                 if dept == "Unknown":
                     return _fail(f"Sender '{sender_email}' not found in Sales or HR email maps")
                 
-                # Try to get name from email map or body
                 canonical_name = ""
                 body_name = email_data.get("employee_name", "").strip()
                 if body_name:
@@ -149,18 +139,19 @@ class ReportProcessor:
             email_data["department"] = dept
             email_data["employee_name"] = canonical_name
 
-            # IMPORTANT: Use RECEIVED DATE for BOTH Sales and HR
             date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
             logger.info(f"📅 Using received date: {date_str} for {dept} employee: {canonical_name}")
 
             email_data["date"] = date_str
 
-            # Validate required fields based on department
             ok, field_err = self.validator.validate_required_fields(email_data, dept)
             if not ok:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
-            # Screenshot validation ONLY for Sales department
+            # Initialize report status as "Valid" (will change if mismatch)
+            report_status = "Valid"
+            
+            # Screenshot validation ONLY for Sales department - determines status only, doesn't block writing
             if dept == "Sales":
                 logger.info(f"📸 Processing screenshot for Sales employee: {canonical_name}")
                 if attachments:
@@ -190,21 +181,26 @@ class ReportProcessor:
                             mismatches.append(f"Duration: email={email_duration}, screenshot={screen_duration}")
                         
                         if mismatches:
+                            report_status = "Invalid"
+                            logger.warning(f"⚠️ Screenshot mismatch for {canonical_name}: {' | '.join(mismatches)}")
+                            # Mark as invalid report but DON'T fail - still write data
                             self.sheets.mark_invalid_report(dept, date_str, canonical_name)
-                            return _fail(f"Screenshot mismatch: {' | '.join(mismatches)}", dept=dept, emp=canonical_name, date=date_str)
-                        
-                        logger.info(f"✅ Screenshot validation PASSED for {canonical_name}")
+                        else:
+                            logger.info(f"✅ Screenshot validation PASSED for {canonical_name}")
                     else:
-                        logger.warning(f"⚠️ No screenshot parsed for {canonical_name} - proceeding without validation")
+                        logger.warning(f"⚠️ No screenshot parsed for {canonical_name}")
                 else:
-                    logger.warning(f"⚠️ No attachments found for {canonical_name} (Sales report proceeding without screenshot)")
+                    logger.warning(f"⚠️ No attachments found for {canonical_name}")
 
-            # For HR, no screenshot validation needed
+            # Add report status to email_data for writing to sheet
+            email_data["report_status"] = report_status
+
             if dept == "HR":
                 logger.info(f"👥 HR report for {canonical_name} - no screenshot validation required")
 
-            # Ensure sheet rows exist and write data
+            # Ensure sheet rows exist and write data (ALWAYS write email body values)
             self.sheets.ensure_date_for_all_employees(dept, date_str)
+            self.sheets.ensure_status_column(dept)  # Ensure Status column exists
             row_num = self.sheets.find_employee_row(dept, date_str, canonical_name)
 
             if not row_num:
@@ -245,7 +241,6 @@ class ReportProcessor:
         logger.info(f"📬 Fetched {len(emails)} email(s) to process")
         print(f"DEBUG: fetched {len(emails)} emails", flush=True)
 
-        # Log all unique senders found
         unique_senders = set()
         for email in emails:
             sender = email.get("sender_email", "")
