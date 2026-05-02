@@ -1,6 +1,6 @@
 """
 vision_parser.py — Parse Callyzer report screenshot correctly
-Extracts: Total Phone Calls, Connected Calls, Duration (next to Total Calls)
+Reads: Total Phone Calls, Connected Calls, and Duration (next to Total Phone Calls)
 """
 
 import json
@@ -22,36 +22,21 @@ logger = logging.getLogger(__name__)
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# IMPROVED PROMPT - Duration is next to Total Phone Calls with stopwatch icon
+# PRECISE PROMPT - Based on actual screenshot layout
 _VISION_PROMPT = """
-You are analyzing a Callyzer report screenshot. Look VERY carefully at the layout.
+You are analyzing a Callyzer report screenshot. The layout is very specific:
 
-The screenshot shows a summary with this exact structure:
+Look for these EXACT patterns:
 
-For "Total Phone Calls":
-- The number (like 100) is the TOTAL CALLS
-- RIGHT NEXT TO IT or BELOW IT is a stopwatch icon 🕐 and a duration (like "28m 10s" or "1h 10m 7s")
-- This duration belongs to the Total Phone Calls
+1. "Total Phone Calls" - This text appears. DIRECTLY BELOW or NEXT to it:
+   - First line: The number (like 100) - this is TOTAL PHONE CALLS
+   - Second line or next to stopwatch icon 🕐: A time like "28m 10s" - this is DURATION
 
-For "Connected Calls":
-- Look for "Connected Calls" text
-- The number next to it (like 27) is CONNECTED CALLS
+2. "Connected Calls" - This text appears. The number next to it is CONNECTED CALLS.
 
-Extract ONLY these 3 values:
-
-1. "Total Phone Calls": The number next to "Total Phone Calls" text
-2. "Total Phone Calls Duration": The time (with 🕐 icon) that appears RIGHT NEXT TO or BELOW Total Phone Calls
-3. "Connected Calls": The number next to "Connected Calls" text
-
-IMPORTANT RULES:
-- The duration is ALWAYS associated with Total Phone Calls (not with Connected Calls)
-- Look for a stopwatch icon 🕐 or text like "28m 10s", "57m 43s", "1h 10m 7s"
-- Convert "28m 10s" to "00:28:10"
-- Convert "1h 10m 7s" to "01:10:07"
-
-For the example in the screenshot:
+For the example screenshot shown:
 - Total Phone Calls should be 100
-- Total Phone Calls Duration should be from the stopwatch icon (like "28m 10s" -> "00:28:10")
+- Total Phone Calls Duration should be "28m 10s" (convert to "00:28:10")
 - Connected Calls should be 27
 
 Return ONLY valid JSON:
@@ -61,8 +46,15 @@ Return ONLY valid JSON:
   "Total Phone Calls Duration": "HH:MM:SS"
 }
 
-Use 0 for numbers you cannot see clearly.
-Use "00:00:00" for duration you cannot see.
+RULES:
+- Duration is ALWAYS associated with Total Phone Calls (look for stopwatch icon 🕐 or time format)
+- Convert "28m 10s" → "00:28:10"
+- Convert "1h 10m 7s" → "01:10:07"
+- If you see "57m 43s" → "00:57:43"
+- Use 0 if you cannot find a number
+- Use "00:00:00" if you cannot find duration
+
+DO NOT read numbers from "Incoming Calls", "Outgoing Calls", "Missed Calls", or other sections.
 """
 
 
@@ -84,7 +76,7 @@ class VisionParser:
             w, h = img.size
             logger.info(f"Original image size: {w}x{h}")
             
-            # Crop to top 40% where the summary section is
+            # Focus on the top portion (0-40%) where summary data lives
             crop_height = int(h * 0.4)
             img = img.crop((0, 0, w, crop_height))
             logger.info(f"Cropped to summary section: {img.size}")
@@ -114,13 +106,45 @@ class VisionParser:
                     pass
 
             if data is None:
-                logger.warning("Could not parse JSON, returning None")
-                return None
+                logger.warning("Could not parse JSON, using fallback")
+                return self._fallback_extraction(img)
 
             return self._clean(data)
 
         except Exception as exc:
             logger.error(f"Image processing failed: {exc}")
+            return None
+
+    def _fallback_extraction(self, img: Image.Image) -> Optional[Dict]:
+        """Fallback using OCR if Gemini fails"""
+        try:
+            import pytesseract
+            text = pytesseract.image_to_string(img)
+            logger.info(f"OCR extracted text: {text[:500]}")
+            
+            # Extract Total Phone Calls
+            total_match = re.search(r'Total Phone Calls[:\s]*(\d+)', text, re.IGNORECASE)
+            total_calls = int(total_match.group(1)) if total_match else 0
+            
+            # Extract Connected Calls
+            connected_match = re.search(r'Connected Calls[:\s]*(\d+)', text, re.IGNORECASE)
+            connected = int(connected_match.group(1)) if connected_match else 0
+            
+            # Extract Duration (look for pattern like "28m 10s")
+            duration_match = re.search(r'(\d+)m\s*(\d+)s', text)
+            if duration_match:
+                m, s = int(duration_match.group(1)), int(duration_match.group(2))
+                duration = f"00:{m:02d}:{s:02d}"
+            else:
+                duration = "00:00:00"
+            
+            return {
+                "Total Phone Calls": total_calls,
+                "Connected Calls": connected,
+                "Total Phone Calls Duration": duration,
+            }
+        except Exception as e:
+            logger.error(f"Fallback extraction failed: {e}")
             return None
 
     @staticmethod
@@ -142,7 +166,7 @@ class VisionParser:
         duration_str = data.get("Total Phone Calls Duration", "")
         duration = VisionParser._convert_duration(duration_str)
         
-        logger.info(f"Cleaned values: TotalCalls={total_calls}, Connected={connected}, Duration={duration}")
+        logger.info(f"Final values: TotalCalls={total_calls}, Connected={connected}, Duration={duration}")
         
         return {
             "Total Phone Calls": total_calls,
@@ -173,12 +197,12 @@ class VisionParser:
             h, m = int(match.group(1)), int(match.group(2))
             return f"{h:02d}:{m:02d}:00"
 
-        # Handle HH:MM:SS format
+        # Handle existing HH:MM:SS
         match = re.search(r'(\d{2}):(\d{2}):(\d{2})', duration_str)
         if match:
             return duration_str
 
-        # Handle MM:SS format
+        # Handle MM:SS
         match = re.search(r'(\d{2}):(\d{2})', duration_str)
         if match:
             m, s = int(match.group(1)), int(match.group(2))
