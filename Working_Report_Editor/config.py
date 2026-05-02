@@ -69,13 +69,12 @@ HR_EMAIL_MAP = {
 }
 
 # ============================================================
-# Build Gmail Query with specific senders (IMPORTANT FIX!)
+# Build Gmail Query with specific senders
 # ============================================================
 ALL_SALES_EMAILS = list(SALES_EMAIL_MAP.keys())
 ALL_HR_EMAILS = list(HR_EMAIL_MAP.keys())
 ALL_ALLOWED_EMAILS = ALL_SALES_EMAILS + ALL_HR_EMAILS
 
-# Create query: from:(email1 OR email2) AND is:unread
 FROM_QUERY = " OR ".join([f"from:{email}" for email in ALL_ALLOWED_EMAILS])
 GMAIL_QUERY = f"({FROM_QUERY}) is:unread"
 
@@ -99,7 +98,7 @@ ACTIVE_END_MINUTE = 59
 DATE_IN_SUBJECT_FORMAT = "%d-%m-%Y"
 SHEET_NAME_FORMAT = "%b-%Y"
 
-# UPDATED: Added "Report Status" column for both Sales and HR
+# Sales column mapping - INCLUDES Status column
 SALES_COLUMN_MAPPING = {
     "Date": 1,
     "Employee Name": 2,
@@ -110,9 +109,10 @@ SALES_COLUMN_MAPPING = {
     "Ref Added": 7,
     "status Viewed": 8,
     "Document Collected": 9,
-    "Report Status": 10,  # Column J - NEW
+    "Report Status": 10,  # Column J - ONLY for Sales
 }
 
+# HR column mapping - NO Status column
 HR_COLUMN_MAPPING = {
     "Date": 1,
     "Employee Name": 2,
@@ -121,7 +121,6 @@ HR_COLUMN_MAPPING = {
     "Duration": 5,
     "Tomorrow Interview Lineups": 6,
     "Interview Held": 7,
-    "Report Status": 8,  # Column H - NEW
 }
 
 SALES_HEADERS = list(SALES_COLUMN_MAPPING.keys())
