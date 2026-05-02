@@ -328,3 +328,9 @@ Prospect: 3
 2026-05-01 19:48:44,19dde979d6a87df7,Daily Report,amanpreet.hredujam@gmail.com,,2026-04-30T13:32:37,FAILED,Sales,,,"Name 'Dear Sir,' not valid and sender not in map",0.08
 2026-05-01 19:48:44,19dde960920e54fe,Daily report,ruwaida.hredujam@gmail.com,,2026-04-30T13:30:54,FAILED,Sales,,,"Name 'Dear Sir,' not valid and sender not in map",0.09
 2026-05-01 19:48:44,19dde93bfda7fafa,KRA,siddhesh.edujam@gmail.com,Siddhesh,2026-04-30T13:28:25,FAILED,Sales,Siddhesh,30-04-2026,Sales report requires screenshot,0.19
+2026-05-02 10:32:44,19de8216eb5826ee,"BDE - Kalpita Padwal
+Total dial- 100
+Total duration- 28m 10s
+Total connected- 27
+Prospect: 4
+Kindly note:- KRA not ",kalpita.edujam@gmail.com,Kalpita,2026-05-02T09:59:44,FAILED,Sales,Kalpita,02-05-2026,"Screenshot mismatch: Calls: email=100, screenshot=98 | Connected: email=27, screenshot=51 | Duration: email=00:28:10, screenshot=00:57:43",6.88
