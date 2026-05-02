@@ -193,12 +193,46 @@ class GeminiParser:
 
     @staticmethod
     def _extract_name(text: str) -> str:
+        """
+        Extract employee name from email body.
+        Ignores common salutations like Dear, Hi, Hello, Kindly, etc.
+        Also ignores email signatures and common phrases.
+        """
+        # List of words/phrases to ignore as name
+        ignore_words = [
+            'dear', 'hi', 'hello', 'kindly', 'please', 'thanks', 'thank', 
+            'regards', 'sincerely', 'best', 'warm', 'good', 'morning',
+            'afternoon', 'evening', 'hardik', 'sir', 'madam', 'team',
+            'everyone', 'all', 'daily', 'report', 'calling', 'kra',
+            'subject', 'forwarded', 'attachment', 'see', 'below',
+            'attached', 'please find', 'here is', 'today\'s', 'sales',
+            'hr', 'callyzer', 'dialer', 'total', 'connected', 'duration'
+        ]
+        
         for line in text.splitlines():
             line = line.strip()
-            if 2 < len(line) < 50 and not re.search(r'\d{2,}', line):
-                if not re.search(r'[:=\-]', line):
-                    if not any(word in line.lower() for word in ['dear', 'hi', 'hello', 'kindly', 'please', 'report', 'calling']):
-                        return line
+            # Skip empty or very short lines
+            if len(line) < 3:
+                continue
+            # Skip lines with numbers
+            if re.search(r'\d', line):
+                continue
+            # Skip lines with colon, equals, dash (field:value patterns)
+            if re.search(r'[:=\-]', line):
+                continue
+            # Skip lines that are too long (likely sentences)
+            if len(line) > 50:
+                continue
+            # Skip lines that look like email addresses
+            if '@' in line or '.' in line:
+                continue
+            # Check if line contains any ignore words
+            line_lower = line.lower()
+            if any(word in line_lower for word in ignore_words):
+                continue
+            # If we get here, this might be a name
+            return line
+        
         return ""
 
     @staticmethod
