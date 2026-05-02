@@ -1,6 +1,7 @@
 """
 sheets_service.py — Google Sheets operations with Calibri font, size 13, center alignment
-Handles: Not Sent (no email), Invalid Report (screenshot mismatch), actual data, and Status column
+Handles: Not Sent (no email), Invalid Report (screenshot mismatch), actual data
+Status column ONLY for Sales department
 """
 
 import logging
@@ -81,8 +82,8 @@ class SheetsService:
         except Exception as e:
             logger.warning(f"Formatting failed: {e}")
 
-    def _ensure_status_column(self, ws: gspread.Worksheet, department: str) -> None:
-        """Ensure 'Report Status' column exists in the sheet header"""
+    def _ensure_sales_status_column(self, ws: gspread.Worksheet) -> None:
+        """Ensure 'Report Status' column exists in Sales sheet ONLY"""
         try:
             headers = ws.row_values(1)
             status_column_name = "Report Status"
@@ -91,7 +92,7 @@ class SheetsService:
                 # Find the last column index
                 last_col = len(headers) + 1
                 ws.update_cell(1, last_col, status_column_name)
-                logger.info(f"Added 'Report Status' column to {ws.title}")
+                logger.info(f"Added 'Report Status' column to Sales sheet {ws.title}")
         except Exception as e:
             logger.warning(f"Could not ensure status column: {e}")
 
@@ -107,8 +108,9 @@ class SheetsService:
         except gspread.WorksheetNotFound:
             ws = self._create_worksheet(ss, name, department)
 
-        # Ensure status column exists
-        self._ensure_status_column(ws, department)
+        # Ensure status column ONLY for Sales department
+        if department == "Sales":
+            self._ensure_sales_status_column(ws)
         
         self._ws_cache[key] = ws
         return ws
@@ -120,7 +122,7 @@ class SheetsService:
         ws.update("A1", [headers])
         ws.update(f"B2:B{len(employees) + 1}", [[emp] for emp in employees])
         self._apply_formatting(ws)
-        logger.info(f"Created sheet '{name}'")
+        logger.info(f"Created sheet '{name}' for {department}")
         return ws
 
     @with_retry()
@@ -142,7 +144,7 @@ class SheetsService:
         if updates:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
             self._apply_formatting(ws)
-            logger.info(f"Added date for {len(updates)} employees")
+            logger.info(f"Added date for {len(updates)} employees in {department}")
 
     @with_retry()
     def find_employee_row(self, department: str, date_str: str, employee_name: str) -> Optional[int]:
@@ -182,7 +184,7 @@ class SheetsService:
 
     @with_retry()
     def mark_not_sent(self, department: str, date_str: str) -> None:
-        """Mark employees who didn't submit any report by deadline"""
+        """Mark employees who didn't submit any report by deadline - Sales only"""
         if department != "Sales":
             return
 
@@ -222,14 +224,14 @@ class SheetsService:
 
     @with_retry()
     def mark_invalid_report(self, department: str, date_str: str, employee_name: str) -> None:
-        """Mark a specific employee's report as 'Invalid Report' when screenshot validation fails"""
+        """Mark a specific employee's report as 'Invalid' in status column - Sales only"""
         if department != "Sales":
             return
 
         ws = self._get_worksheet(department, date_str)
         
-        # First ensure the status column exists
-        self._ensure_status_column(ws, department)
+        # Ensure the status column exists
+        self._ensure_sales_status_column(ws)
         
         # Find the status column index
         headers = ws.row_values(1)
@@ -258,7 +260,7 @@ class SheetsService:
             logger.warning(f"Row not found for {employee_name} on {date_str}")
             return
 
-        # Update the status column only (not overwriting data)
+        # Update the status column with "Invalid"
         col_letter = gspread.utils.rowcol_to_a1(row_num, status_col).rstrip("0123456789")
         ws.update(f"{col_letter}{row_num}", [["Invalid"]], value_input_option="USER_ENTERED")
         self._apply_formatting(ws)
