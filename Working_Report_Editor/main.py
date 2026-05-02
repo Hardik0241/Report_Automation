@@ -1,5 +1,6 @@
 """
-main.py — Production pipeline orchestrator with per-email screenshot validation
+main.py — Production pipeline orchestrator
+Date = Received date for BOTH Sales and HR
 """
 
 import logging
@@ -16,7 +17,6 @@ from gemini_parser import GeminiParser
 from sheets_service import SheetsService
 from tracker import Tracker
 from utils import (
-    extract_date_from_subject,
     extract_email_address,
     received_timestamp_to_date,
 )
@@ -64,6 +64,7 @@ class ReportProcessor:
         from_header = email.get("from", "")
         sender_email = email.get("sender_email", "")
         received_at = email.get("received_at", datetime.now())
+        received_ms = email.get("received_ms", 0)
         preview = (subject or body)[:120]
 
         def _fail(reason: str, dept="", emp="", date="") -> Dict:
@@ -95,59 +96,63 @@ class ReportProcessor:
             return {"status": "DUPLICATE"}
 
         try:
+            # Parse email body for values (not for department/name)
             email_data = self.parser.parse_email(body)
             if not email_data:
                 return _fail("Email body parsing failed")
 
             print(f"DEBUG: parsed email_data = {email_data}", flush=True)
 
-            dept = email_data.get("department", "Unknown")
-            if dept == "Unknown":
-                if sender_email in SALES_EMAIL_MAP:
-                    dept = "Sales"
-                elif sender_email in HR_EMAIL_MAP:
-                    dept = "HR"
-
-            if dept not in ("Sales", "HR"):
-                return _fail(f"Cannot determine department. Sender: {sender_email}")
+            # Determine department from sender email map (MOST RELIABLE)
+            dept = None
+            if sender_email in SALES_EMAIL_MAP:
+                dept = "Sales"
+                canonical_name = SALES_EMAIL_MAP[sender_email]
+                logger.info(f"Department: Sales (from sender email: {sender_email})")
+            elif sender_email in HR_EMAIL_MAP:
+                dept = "HR"
+                canonical_name = HR_EMAIL_MAP[sender_email]
+                logger.info(f"Department: HR (from sender email: {sender_email})")
+            else:
+                # Fallback to body detection
+                dept = email_data.get("department", "Unknown")
+                if dept == "Unknown":
+                    return _fail(f"Sender {sender_email} not found in department maps")
+                
+                # Try to get name from email map or body
+                canonical_name = ""
+                if dept == "Sales" and sender_email in SALES_EMAIL_MAP:
+                    canonical_name = SALES_EMAIL_MAP[sender_email]
+                elif dept == "HR" and sender_email in HR_EMAIL_MAP:
+                    canonical_name = HR_EMAIL_MAP[sender_email]
+                else:
+                    body_name = email_data.get("employee_name", "").strip()
+                    if body_name:
+                        ok, name, _ = self.validator.validate_employee_name(body_name, dept)
+                        if ok:
+                            canonical_name = name
+                    
+                    if not canonical_name:
+                        return _fail(f"Cannot determine name for sender: {sender_email}", dept=dept)
 
             email_data["department"] = dept
-            employees = SALES_EMPLOYEES if dept == "Sales" else HR_EMPLOYEES
-
-            body_name = email_data.get("employee_name", "").strip()
-            email_map = SALES_EMAIL_MAP if dept == "Sales" else HR_EMAIL_MAP
-            canonical_name = email_map.get(sender_email, "")
-
-            if body_name:
-                ok, name, _ = self.validator.validate_employee_name(body_name, dept)
-                if ok:
-                    canonical_name = name
-                elif not canonical_name:
-                    return _fail(f"Name '{body_name}' not valid and sender not in map", dept=dept)
-
-            if not canonical_name:
-                return _fail(f"No valid name for sender: {sender_email}", dept=dept)
-
             email_data["employee_name"] = canonical_name
 
-            # Determine date
-            if dept == "Sales":
-                date_str = received_at.strftime("%d-%m-%Y")
-            else:
-                date_str = extract_date_from_subject(subject)
-                if not date_str:
-                    date_str = received_at.strftime("%d-%m-%Y")
+            # IMPORTANT: Use RECEIVED DATE for BOTH Sales and HR
+            # Date = when email was received (from Gmail)
+            date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
+            logger.info(f"Using received date: {date_str} for {dept} employee: {canonical_name}")
 
             email_data["date"] = date_str
 
+            # Validate required fields based on department
             ok, field_err = self.validator.validate_required_fields(email_data, dept)
             if not ok:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
-            # Screenshot validation for Sales department - ONLY for this specific email
+            # Screenshot validation ONLY for Sales department
             if dept == "Sales" and attachments:
                 screenshot_data = None
-                # Only parse attachments from THIS email
                 for att in attachments:
                     if any(att.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg']):
                         screenshot_data = self.vision.parse_screenshot(att)
@@ -156,21 +161,14 @@ class ReportProcessor:
                             break
                 
                 if screenshot_data:
-                    # Extract email values (from mail body/draft)
                     email_calls = email_data.get("Total Dialed", 0)
                     email_connected = email_data.get("Total Connected", 0)
                     email_duration = email_data.get("Duration", "00:00:00")
                     
-                    # Extract screenshot values
                     screen_calls = screenshot_data.get("Total Phone Calls", 0)
                     screen_connected = screenshot_data.get("Connected Calls", 0)
                     screen_duration = screenshot_data.get("Total Phone Calls Duration", "00:00:00")
                     
-                    # Log comparison
-                    logger.info(f"Email values for {canonical_name}: Calls={email_calls}, Connected={email_connected}, Duration={email_duration}")
-                    logger.info(f"Screenshot values for {canonical_name}: Calls={screen_calls}, Connected={screen_connected}, Duration={screen_duration}")
-                    
-                    # Check for mismatches
                     mismatches = []
                     if email_calls != screen_calls:
                         mismatches.append(f"Calls: email={email_calls}, screenshot={screen_calls}")
@@ -185,11 +183,15 @@ class ReportProcessor:
                     
                     logger.info(f"Screenshot validation PASSED for {canonical_name}")
                 else:
-                    logger.warning(f"No screenshot attached for {canonical_name}")
+                    logger.warning(f"No screenshot parsed for {canonical_name}")
             elif dept == "Sales" and not attachments:
-                logger.warning(f"No attachments found for {canonical_name}")
+                logger.warning(f"No attachments found for {canonical_name} (Sales report may still proceed)")
 
-            # Ensure sheet rows exist and write data from EMAIL BODY (not screenshot)
+            # For HR, no screenshot validation needed
+            if dept == "HR":
+                logger.info(f"HR report for {canonical_name} - skipping screenshot validation")
+
+            # Ensure sheet rows exist and write data
             self.sheets.ensure_date_for_all_employees(dept, date_str)
             row_num = self.sheets.find_employee_row(dept, date_str, canonical_name)
 
@@ -221,7 +223,7 @@ class ReportProcessor:
 
     def run(self) -> List[Dict]:
         global PROCESSED_EMAILS
-        PROCESSED_EMAILS = set()  # Reset for each run
+        PROCESSED_EMAILS = set()
         
         logger.info("=" * 60)
         logger.info("Report Processor started")
