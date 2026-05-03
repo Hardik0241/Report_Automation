@@ -441,3 +441,16 @@ Kindly note:- KRA not ",kalpita.edujam@gmail.com,Kalpita,2026-05-02T09:59:44,SUC
 2026-05-03 14:11:11,19de8e3d7d1f8e1f,KRA,siddhesh.edujam@gmail.com,Siddhesh,2026-05-02T13:32:06,FAILED,Sales,Siddhesh,02-05-2026,"Missing required fields: Total Dialed, Total Connected",0.09
 2026-05-03 14:11:11,19de8e21638bbcda,Daily report,mehvish.hredujam@gmail.com,,2026-05-02T13:30:12,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',0.50
 2026-05-03 14:11:11,19de8e1754c6fc9c,Daily report,ruwaida.hredujam@gmail.com,,2026-05-02T13:29:31,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',0.26
+2026-05-03 15:11:02,19de9e3ea2862af9,KRA REPORT,dhanshree.edujam@gmail.com,,2026-05-02T18:11:46,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',7.10
+2026-05-03 15:11:14,19de98b5a1915440,Calling Report,prafulp.edujam@gmail.com,,2026-05-02T16:35:03,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',11.31
+2026-05-03 15:11:21,19de90e3c362d0b3,02/05/26,muskan.edujam@gmail.com,,2026-05-02T14:18:23,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',7.51
+2026-05-03 15:11:22,19de8f89b26ddd6b,KRA Report,sakibs.edujam@gmail.com,,2026-05-02T13:54:39,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',0.59
+2026-05-03 15:11:22,19de8ef2d3680c6b,02/05/2026,sachingodara.edujam@gmail.com,Sachin,2026-05-02T13:44:27,FAILED,Sales,Sachin,02-05-2026,"Missing required fields: Total Dialed, Total Connected",0.30
+2026-05-03 15:11:23,19de8ee78a77c65e,Report,rajeshp.edujam@gmail.com,,2026-05-02T13:43:42,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',0.76
+2026-05-03 15:11:23,19de8e859c08acaf,REPORT,saifd.edujam@gmail.com,,2026-05-02T13:36:58,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',0.53
+2026-05-03 15:11:24,19de8e61cddf2132,Reports,komals.edujam@gmail.com,,2026-05-02T13:34:35,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',0.69
+2026-05-03 15:11:25,19de8e5f30eacd21,report,abhijit.edujam@gmail.com,,2026-05-02T13:34:24,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',0.67
+2026-05-03 15:11:25,19de8e4e1717cb66,Calling report 02/05/26,saylip.edujam@gmail.com,Sayli,2026-05-02T13:33:14,FAILED,Sales,Sayli,02-05-2026,"Missing required fields: Total Dialed, Total Connected",0.19
+2026-05-03 15:11:25,19de8e3d7d1f8e1f,KRA,siddhesh.edujam@gmail.com,Siddhesh,2026-05-02T13:32:06,FAILED,Sales,Siddhesh,02-05-2026,"Missing required fields: Total Dialed, Total Connected",0.19
+2026-05-03 15:11:26,19de8e21638bbcda,Daily report,mehvish.hredujam@gmail.com,,2026-05-02T13:30:12,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',0.61
+2026-05-03 15:11:26,19de8e1754c6fc9c,Daily report,ruwaida.hredujam@gmail.com,,2026-05-02T13:29:31,FAILED,,,,Unexpected error: 'SheetsService' object has no attribute 'ensure_status_column',0.33
