@@ -1,6 +1,6 @@
 """
 main.py — Production pipeline orchestrator
-Always writes email body values, adds Report Status column
+ALWAYS writes email body values to sheets, adds Report Status column for Sales
 """
 
 import logging
@@ -32,7 +32,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Track processed email IDs to avoid re-processing within same run
 PROCESSED_EMAILS = set()
 
 
@@ -49,20 +48,19 @@ class ReportProcessor:
         self._write_buffer: Dict[Tuple[str, str], List[Tuple[int, Dict]]] = {}
 
     def _match_sender_to_department(self, sender_email: str) -> Tuple[Optional[str], Optional[str]]:
-        """Match sender email to department and return (department, employee_name)."""
         sender_lower = sender_email.lower()
         
         for email, name in SALES_EMAIL_MAP.items():
             if email.lower() == sender_lower:
-                logger.info(f"✅ Matched Sales employee: {name} via email: {email}")
+                logger.info(f"✅ Matched Sales employee: {name}")
                 return ("Sales", name)
         
         for email, name in HR_EMAIL_MAP.items():
             if email.lower() == sender_lower:
-                logger.info(f"✅ Matched HR employee: {name} via email: {email}")
+                logger.info(f"✅ Matched HR employee: {name}")
                 return ("HR", name)
         
-        logger.warning(f"❌ No department match for sender email: {sender_email}")
+        logger.warning(f"❌ No department match for: {sender_email}")
         return (None, None)
 
     def process_email(self, email: Dict) -> Dict:
@@ -70,46 +68,39 @@ class ReportProcessor:
         email_id = email.get("id", "")
         
         if email_id in PROCESSED_EMAILS:
-            logger.info(f"Skipping already processed email: {email_id}")
-            return {"status": "SKIPPED", "reason": "Already processed"}
-        
+            return {"status": "SKIPPED"}
+
         subject = email.get("subject", "")
         body = email.get("body", "")
         attachments = email.get("attachments", [])
         email_hash = email.get("hash", "")
-        from_header = email.get("from", "")
         sender_email = email.get("sender_email", "")
         received_at = email.get("received_at", datetime.now())
         received_ms = email.get("received_ms", 0)
         preview = (subject or body)[:120]
 
-        logger.info(f"📧 Processing email from sender: '{sender_email}'")
+        logger.info(f"📧 Processing: {sender_email}")
 
         def _fail(reason: str, dept="", emp="", date="") -> Dict:
             self.tracker.log_status(
-                preview, "FAILED", email_id, dept, emp, date,
-                reason=reason, processing_time=time.time() - t0,
-                sender_email=sender_email, sender_name=emp,
-                received_time=received_at,
+                preview, "FAILED", email_id, dept, emp, date, reason,
+                processing_time=time.time() - t0, sender_email=sender_email,
+                sender_name=emp, received_time=received_at,
             )
-            logger.warning(f"FAILED [{email_id}]: {reason}")
             return {"status": "FAILED", "reason": reason}
 
         def _success(dept: str, emp: str, date_str: str) -> Dict:
             PROCESSED_EMAILS.add(email_id)
             self.tracker.mark_processed(email_hash)
-            elapsed = time.time() - t0
             self.tracker.log_status(
                 preview, "SUCCESS", email_id, dept, emp, date_str,
-                processing_time=elapsed, sender_email=sender_email,
+                processing_time=time.time() - t0, sender_email=sender_email,
                 sender_name=emp, received_time=received_at,
             )
-            logger.info(f"SUCCESS — {dept} / {emp} / {date_str} [{elapsed:.1f}s]")
             return {"status": "SUCCESS", "department": dept, "employee": emp, "date": date_str}
 
         if self.tracker.is_duplicate(email_hash):
-            self.tracker.log_status(preview, "DUPLICATE", email_id, processing_time=time.time() - t0)
-            logger.info(f"DUPLICATE skipped: {subject}")
+            self.tracker.log_status(preview, "DUPLICATE", email_id)
             return {"status": "DUPLICATE"}
 
         try:
@@ -117,90 +108,57 @@ class ReportProcessor:
             if not email_data:
                 return _fail("Email body parsing failed")
 
-            print(f"DEBUG: parsed email_data = {email_data}", flush=True)
-
             dept, canonical_name = self._match_sender_to_department(sender_email)
             
             if dept is None:
-                dept = email_data.get("department", "Unknown")
-                if dept == "Unknown":
-                    return _fail(f"Sender '{sender_email}' not found in Sales or HR email maps")
-                
-                canonical_name = ""
-                body_name = email_data.get("employee_name", "").strip()
-                if body_name:
-                    ok, name, _ = self.validator.validate_employee_name(body_name, dept)
-                    if ok:
-                        canonical_name = name
-                
-                if not canonical_name:
-                    return _fail(f"Cannot determine name for sender: {sender_email}", dept=dept)
+                return _fail(f"Sender '{sender_email}' not in department maps")
 
             email_data["department"] = dept
             email_data["employee_name"] = canonical_name
 
             date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
-            logger.info(f"📅 Using received date: {date_str} for {dept} employee: {canonical_name}")
-
             email_data["date"] = date_str
 
+            # Validate required fields
             ok, field_err = self.validator.validate_required_fields(email_data, dept)
             if not ok:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
-            # Initialize report status as "Valid" (will change if mismatch)
+            # Initialize report status (for Sales only)
             report_status = "Valid"
             
-            # Screenshot validation ONLY for Sales department - determines status only, doesn't block writing
-            if dept == "Sales":
-                logger.info(f"📸 Processing screenshot for Sales employee: {canonical_name}")
-                if attachments:
-                    screenshot_data = None
-                    for att in attachments:
-                        if any(att.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg']):
-                            screenshot_data = self.vision.parse_screenshot(att)
-                            if screenshot_data:
-                                logger.info(f"Screenshot parsed for {canonical_name}: {screenshot_data}")
-                                break
+            # Screenshot validation for Sales only (determines status, doesn't block writing)
+            if dept == "Sales" and attachments:
+                screenshot_data = None
+                for att in attachments:
+                    if any(att.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg']):
+                        screenshot_data = self.vision.parse_screenshot(att)
+                        if screenshot_data:
+                            break
+                
+                if screenshot_data:
+                    email_calls = email_data.get("Total Dialed", 0)
+                    email_connected = email_data.get("Total Connected", 0)
+                    email_duration = email_data.get("Duration", "00:00:00")
                     
-                    if screenshot_data:
-                        email_calls = email_data.get("Total Dialed", 0)
-                        email_connected = email_data.get("Total Connected", 0)
-                        email_duration = email_data.get("Duration", "00:00:00")
-                        
-                        screen_calls = screenshot_data.get("Total Phone Calls", 0)
-                        screen_connected = screenshot_data.get("Connected Calls", 0)
-                        screen_duration = screenshot_data.get("Total Phone Calls Duration", "00:00:00")
-                        
-                        mismatches = []
-                        if email_calls != screen_calls:
-                            mismatches.append(f"Calls: email={email_calls}, screenshot={screen_calls}")
-                        if email_connected != screen_connected:
-                            mismatches.append(f"Connected: email={email_connected}, screenshot={screen_connected}")
-                        if email_duration != screen_duration:
-                            mismatches.append(f"Duration: email={email_duration}, screenshot={screen_duration}")
-                        
-                        if mismatches:
-                            report_status = "Invalid"
-                            logger.warning(f"⚠️ Screenshot mismatch for {canonical_name}: {' | '.join(mismatches)}")
-                            # Mark as invalid report but DON'T fail - still write data
-                            self.sheets.mark_invalid_report(dept, date_str, canonical_name)
-                        else:
-                            logger.info(f"✅ Screenshot validation PASSED for {canonical_name}")
-                    else:
-                        logger.warning(f"⚠️ No screenshot parsed for {canonical_name}")
+                    screen_calls = screenshot_data.get("Total Phone Calls", 0)
+                    screen_connected = screenshot_data.get("Connected Calls", 0)
+                    screen_duration = screenshot_data.get("Total Phone Calls Duration", "00:00:00")
+                    
+                    if (email_calls != screen_calls or 
+                        email_connected != screen_connected or 
+                        email_duration != screen_duration):
+                        report_status = "Invalid"
+                        logger.warning(f"⚠️ Screenshot mismatch for {canonical_name}")
                 else:
-                    logger.warning(f"⚠️ No attachments found for {canonical_name}")
+                    logger.warning(f"⚠️ No screenshot parsed for {canonical_name}")
 
-            # Add report status to email_data for writing to sheet
+            # Add status to email_data
             email_data["report_status"] = report_status
 
-            if dept == "HR":
-                logger.info(f"👥 HR report for {canonical_name} - no screenshot validation required")
-
-            # Ensure sheet rows exist and write data (ALWAYS write email body values)
+            # Ensure sheet rows exist and write data (ALWAYS write email values)
             self.sheets.ensure_date_for_all_employees(dept, date_str)
-            self.sheets.ensure_status_column(dept)  # Ensure Status column exists
+            self.sheets.ensure_status_column(dept, date_str)
             row_num = self.sheets.find_employee_row(dept, date_str, canonical_name)
 
             if not row_num:
@@ -209,14 +167,15 @@ class ReportProcessor:
             key = (dept, date_str)
             self._write_buffer.setdefault(key, []).append((row_num, email_data))
 
+            # Mark invalid in status column separately if needed
+            if dept == "Sales" and report_status == "Invalid":
+                self.sheets.mark_invalid_report(dept, date_str, canonical_name)
+
             return _success(dept, canonical_name, date_str)
 
-        except BaseProcessingError as exc:
-            log_error(exc, {"email_id": email_id})
-            return _fail(str(exc))
         except Exception as exc:
             log_error(exc, {"email_id": email_id})
-            return _fail(f"Unexpected error: {exc}")
+            return _fail(f"Error: {exc}")
 
     def _flush_writes(self) -> None:
         if not self._write_buffer:
@@ -235,22 +194,13 @@ class ReportProcessor:
         
         logger.info("=" * 60)
         logger.info("Report Processor started")
-        print("DEBUG: run() method entered", flush=True)
 
         emails = self.gmail.fetch_emails()
         logger.info(f"📬 Fetched {len(emails)} email(s) to process")
-        print(f"DEBUG: fetched {len(emails)} emails", flush=True)
-
-        unique_senders = set()
-        for email in emails:
-            sender = email.get("sender_email", "")
-            if sender:
-                unique_senders.add(sender)
-        logger.info(f"📧 Unique senders found: {unique_senders}")
 
         results = []
         for idx, email in enumerate(emails, 1):
-            logger.info(f"Processing {idx}/{len(emails)}: {email.get('subject', '')}")
+            logger.info(f"Processing {idx}/{len(emails)}")
             results.append(self.process_email(email))
 
         self._flush_writes()
@@ -265,6 +215,5 @@ class ReportProcessor:
 
 
 if __name__ == "__main__":
-    print("DEBUG: Starting processor via if __name__ block", flush=True)
     processor = ReportProcessor()
     processor.run()
