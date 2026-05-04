@@ -82,17 +82,18 @@ class SheetsService:
         except Exception as e:
             logger.warning(f"Formatting failed: {e}")
 
-    def _ensure_sales_status_column(self, ws: gspread.Worksheet) -> None:
+    def ensure_status_column(self, department: str, date_str: str) -> None:
         """Ensure 'Report Status' column exists in Sales sheet ONLY"""
+        if department != "Sales":
+            return
+        
+        ws = self._get_worksheet(department, date_str)
         try:
             headers = ws.row_values(1)
-            status_column_name = "Report Status"
-            
-            if status_column_name not in headers:
-                # Find the last column index
+            if "Report Status" not in headers:
                 last_col = len(headers) + 1
-                ws.update_cell(1, last_col, status_column_name)
-                logger.info(f"Added 'Report Status' column to Sales sheet {ws.title}")
+                ws.update_cell(1, last_col, "Report Status")
+                logger.info(f"Added 'Report Status' column to {ws.title}")
         except Exception as e:
             logger.warning(f"Could not ensure status column: {e}")
 
@@ -108,10 +109,6 @@ class SheetsService:
         except gspread.WorksheetNotFound:
             ws = self._create_worksheet(ss, name, department)
 
-        # Ensure status column ONLY for Sales department
-        if department == "Sales":
-            self._ensure_sales_status_column(ws)
-        
         self._ws_cache[key] = ws
         return ws
 
@@ -157,6 +154,7 @@ class SheetsService:
 
     @with_retry()
     def write_batch(self, department: str, date_str: str, updates: List[Tuple[int, Dict]]) -> None:
+        """Write data to Google Sheets - ALWAYS writes email body values"""
         if not updates:
             return
         ws = self._get_worksheet(department, date_str)
@@ -166,6 +164,9 @@ class SheetsService:
             cell_updates = {}
             for field, col in mapping.items():
                 if field in ("Date", "Employee Name"):
+                    continue
+                # Skip Report Status in write_batch - handled separately
+                if field == "Report Status":
                     continue
                 val = data.get(field, 0 if field != "Duration" else "00:00:00")
                 cell_updates[col] = val
@@ -209,9 +210,12 @@ class SheetsService:
             has_data = False
             for field, col in mapping.items():
                 if field not in ("Date", "Employee Name"):
+                    if field == "Report Status":
+                        continue
                     if col - 1 < len(all_values[row_num - 1]) and all_values[row_num - 1][col - 1].strip():
-                        has_data = True
-                        break
+                        if all_values[row_num - 1][col - 1].strip() not in ["", "Not Sent", "Invalid"]:
+                            has_data = True
+                            break
 
             if not has_data:
                 col_letter = gspread.utils.rowcol_to_a1(row_num, first_data_col).rstrip("0123456789")
@@ -230,10 +234,7 @@ class SheetsService:
 
         ws = self._get_worksheet(department, date_str)
         
-        # Ensure the status column exists
-        self._ensure_sales_status_column(ws)
-        
-        # Find the status column index
+        # Find the status column
         headers = ws.row_values(1)
         status_col = None
         for i, header in enumerate(headers, start=1):
@@ -242,7 +243,7 @@ class SheetsService:
                 break
         
         if status_col is None:
-            # Status column not found, add it at the end
+            # Add status column at the end
             status_col = len(headers) + 1
             ws.update_cell(1, status_col, "Report Status")
         
