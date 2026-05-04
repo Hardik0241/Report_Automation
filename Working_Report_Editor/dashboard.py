@@ -37,12 +37,10 @@ def clear_logs_file():
     log_path = "Working_Report_Editor/logs/processing_logs.csv"
     
     if os.path.exists(log_path):
-        # Keep only the headers, remove all data rows
         headers = ["Timestamp", "Email_ID", "Email_Subject", "Sender_Email", 
                    "Sender_Name", "Received_Time", "Status", "Department", 
                    "Employee_Name", "Date", "Reason", "Processing_Time_Sec"]
         
-        # Write just the headers back to the file
         df_empty = pd.DataFrame(columns=headers)
         df_empty.to_csv(log_path, index=False)
         return True
@@ -94,7 +92,6 @@ with st.sidebar:
     st.markdown("---")
     
     if st.button("🔄 Refresh Data", use_container_width=True):
-        # Clear the actual CSV file
         clear_logs_file()
         st.session_state.reset_dashboard = True
         st.cache_data.clear()
@@ -103,11 +100,10 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 👥 Employee Registry")
     st.metric("Sales Team", len(SALES_EMPLOYEES))
-    st.markdown("### 👥 HR Team")
     st.metric("HR Team", len(HR_EMPLOYEES))
     st.markdown("---")
     st.markdown("### 📅 Schedule Info")
-    st.info("Active Window: 7:00 PM - 11:59 PM | Runs every 30 minutes via GitHub Actions")
+    st.info("⏰ Active Window: 7:00 PM - 11:59 PM | Runs every 30 minutes via GitHub Actions")
     st.markdown("---")
     st.caption("📊 Report Automation System | Powered by Gemini AI")
 
@@ -123,7 +119,6 @@ st.markdown("""
 if st.session_state.reset_dashboard:
     st.session_state.reset_dashboard = False
     
-    # Show fresh/empty state
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("📧 Total Processed", 0)
@@ -137,8 +132,7 @@ if st.session_state.reset_dashboard:
         st.metric("📅 Today's Success", 0)
     
     st.markdown("---")
-    st.success("✅ Dashboard has been reset. The log file has been cleared. New data will appear after the next GitHub Actions run.")
-    st.info("📌 Tip: Run a manual workflow from GitHub Actions to process new emails.")
+    st.success("✅ Dashboard has been reset. The log file has been cleared.")
     st.stop()
 
 # Normal data load
@@ -147,7 +141,7 @@ stats = get_stats(df)
 
 # Show message if no data
 if df.empty:
-    st.info("📭 No data available. Reports will appear here once processed via GitHub Actions.")
+    st.info("📭 No data available. Reports will appear here automatically after the next scheduled run (7:00 PM - 11:59 PM).")
     st.stop()
 
 # KPI Cards
