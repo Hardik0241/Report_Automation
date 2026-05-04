@@ -53,12 +53,32 @@ jobs:
           CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
 
+      - name: Debug - Check if logs file exists
+        run: |
+          echo "=== Checking logs directory ==="
+          ls -la Working_Report_Editor/logs/ || echo "Logs directory not found"
+          echo ""
+          echo "=== Checking processing_logs.csv ==="
+          if [ -f Working_Report_Editor/logs/processing_logs.csv ]; then
+            echo "File exists! Contents:"
+            cat Working_Report_Editor/logs/processing_logs.csv
+          else
+            echo "File does not exist yet"
+          fi
+
       - name: Commit and push logs to repository
         run: |
           cd Working_Report_Editor
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create logs directory and ensure file exists
+          mkdir -p logs
+          touch logs/processing_logs.csv
+          
+          # Force add the file
           git add -f logs/processing_logs.csv
+          
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
