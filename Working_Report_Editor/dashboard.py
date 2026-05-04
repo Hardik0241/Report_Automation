@@ -34,24 +34,47 @@ div[data-testid="stMetric"] .stMetricValue { color: #ffffff !important; }
 
 def clear_logs_file():
     """Clear the contents of processing_logs.csv while keeping headers"""
-    log_path = "Working_Report_Editor/logs/processing_logs.csv"
+    # Try multiple possible paths
+    possible_paths = [
+        "logs/processing_logs.csv",                           # Root logs folder
+        "Working_Report_Editor/logs/processing_logs.csv",    # Inside Working_Report_Editor
+        "../logs/processing_logs.csv",                       # Parent directory
+    ]
     
-    if os.path.exists(log_path):
-        headers = ["Timestamp", "Email_ID", "Email_Subject", "Sender_Email", 
-                   "Sender_Name", "Received_Time", "Status", "Department", 
-                   "Employee_Name", "Date", "Reason", "Processing_Time_Sec"]
-        
-        df_empty = pd.DataFrame(columns=headers)
-        df_empty.to_csv(log_path, index=False)
-        return True
-    return False
+    headers = ["Timestamp", "Email_ID", "Email_Subject", "Sender_Email", 
+               "Sender_Name", "Received_Time", "Status", "Department", 
+               "Employee_Name", "Date", "Reason", "Processing_Time_Sec"]
+    
+    cleared = False
+    for log_path in possible_paths:
+        if os.path.exists(log_path):
+            df_empty = pd.DataFrame(columns=headers)
+            df_empty.to_csv(log_path, index=False)
+            print(f"Cleared: {log_path}")
+            cleared = True
+    
+    return cleared
+
+
+def find_logs_file():
+    """Find the actual logs file path"""
+    possible_paths = [
+        "logs/processing_logs.csv",
+        "Working_Report_Editor/logs/processing_logs.csv",
+        "../logs/processing_logs.csv",
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def load_logs():
     """Load processing logs from CSV file"""
-    log_path = "Working_Report_Editor/logs/processing_logs.csv"
+    log_path = find_logs_file()
     
-    if not os.path.exists(log_path):
+    if log_path is None:
         return pd.DataFrame(columns=[
             "Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"
         ])
@@ -92,6 +115,7 @@ with st.sidebar:
     st.markdown("---")
     
     if st.button("🔄 Refresh Data", use_container_width=True):
+        # Clear the actual CSV file
         clear_logs_file()
         st.session_state.reset_dashboard = True
         st.cache_data.clear()
