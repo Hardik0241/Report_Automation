@@ -1,6 +1,6 @@
 """
 dashboard.py — Report Automation Dashboard
-Manual Refresh Only
+Refresh Button clears all data and resets to zero
 """
 
 import os
@@ -63,12 +63,19 @@ def get_stats(df: pd.DataFrame) -> dict:
     return {"total": total, "success": success, "failed": failed, "rate": round(rate, 1), "today_success": today_success}
 
 
+# Initialize session state for reset flag
+if "reset_dashboard" not in st.session_state:
+    st.session_state.reset_dashboard = False
+
+
 # Sidebar
 with st.sidebar:
     st.markdown("## ⚙️ Dashboard Controls")
     st.markdown("---")
     
+    # Refresh button - when clicked, sets reset flag to True
     if st.button("🔄 Refresh Data", use_container_width=True):
+        st.session_state.reset_dashboard = True
         st.cache_data.clear()
         st.rerun()
     
@@ -90,7 +97,29 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Load data
+# Check if reset was triggered
+if st.session_state.reset_dashboard:
+    # Show fresh/empty state
+    st.session_state.reset_dashboard = False
+    
+    # KPI Cards - ALL ZEROS
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        st.metric("📧 Total Processed", 0)
+    with c2:
+        st.metric("✅ Success", 0)
+    with c3:
+        st.metric("❌ Failed", 0)
+    with c4:
+        st.metric("📈 Success Rate", "0%")
+    with c5:
+        st.metric("📅 Today's Success", 0)
+    
+    st.markdown("---")
+    st.info("🔄 Dashboard has been reset. New data will appear after the next GitHub Actions run.")
+    st.stop()
+
+# Normal data load
 df = load_logs()
 stats = get_stats(df)
 
@@ -114,7 +143,7 @@ with c5:
 
 st.markdown("---")
 
-# Recent Reports
+# Recent Reports (only show if there's data)
 st.markdown('<div class="section-header">📨 Recent Activity</div>', unsafe_allow_html=True)
 recent = df.sort_values("Timestamp", ascending=False).head(15)
 if not recent.empty:
@@ -142,14 +171,16 @@ if not dept_data.empty:
     fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig, use_container_width=True)
 
-# Top Contributors
-st.markdown('<div class="section-header">🏆 Top Contributors</div>', unsafe_allow_html=True)
-top_emp = df[df["Status"] == "SUCCESS"]["Employee_Name"].value_counts().head(8).reset_index()
-if not top_emp.empty:
-    top_emp.columns = ["Employee", "Reports"]
-    fig = px.bar(top_emp, x="Reports", y="Employee", orientation="h", color="Reports", color_continuous_scale="blues", text="Reports")
-    fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
+# Top Contributors (only show if there are successes)
+success_df = df[df["Status"] == "SUCCESS"]
+if not success_df.empty:
+    st.markdown('<div class="section-header">🏆 Top Contributors</div>', unsafe_allow_html=True)
+    top_emp = success_df["Employee_Name"].value_counts().head(8).reset_index()
+    if not top_emp.empty:
+        top_emp.columns = ["Employee", "Reports"]
+        fig = px.bar(top_emp, x="Reports", y="Employee", orientation="h", color="Reports", color_continuous_scale="blues", text="Reports")
+        fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
 
 # Failure Analysis (only if there are failures)
 fail_df = df[df["Status"] == "FAILED"]
