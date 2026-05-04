@@ -13,42 +13,6 @@ from config import HR_EMPLOYEES, SALES_EMPLOYEES
 
 st.set_page_config(page_title="Report Automation Dashboard", page_icon="📊", layout="wide")
 
-# ============================================================
-# DEBUG SECTION - Added to diagnose logs file location
-# ============================================================
-st.write("### 🔍 Debug Information")
-st.write("**Current working directory:**", os.getcwd())
-st.write("**Files in current directory:**", os.listdir("."))
-
-# Check for Working_Report_Editor folder
-if os.path.exists("Working_Report_Editor"):
-    st.write("**Files in Working_Report_Editor:**", os.listdir("Working_Report_Editor"))
-    if os.path.exists("Working_Report_Editor/logs"):
-        st.write("**Files in Working_Report_Editor/logs:**", os.listdir("Working_Report_Editor/logs"))
-
-# Try to find the logs file
-log_paths = [
-    "logs/processing_logs.csv",
-    "Working_Report_Editor/logs/processing_logs.csv",
-    "../logs/processing_logs.csv",
-]
-
-df = None
-for path in log_paths:
-    if os.path.exists(path):
-        st.success(f"✅ Found logs at: {path}")
-        df = pd.read_csv(path)
-        break
-
-if df is None:
-    st.error("❌ Logs file not found in any expected location")
-    df = pd.DataFrame(columns=[
-        "Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"
-    ])
-
-st.divider()
-# ============================================================
-
 # Dark mode CSS
 st.markdown("""
 <style>
@@ -68,24 +32,33 @@ div[data-testid="stMetric"] .stMetricValue { color: #ffffff !important; }
 """, unsafe_allow_html=True)
 
 
+def load_logs():
+    """Load processing logs from CSV file"""
+    log_path = "Working_Report_Editor/logs/processing_logs.csv"
+    
+    if not os.path.exists(log_path):
+        return pd.DataFrame(columns=[
+            "Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"
+        ])
+    
+    df = pd.read_csv(log_path)
+    if "Timestamp" in df.columns:
+        df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
+    return df
+
+
 def get_stats(df: pd.DataFrame) -> dict:
     if df.empty:
         return {"total": 0, "success": 0, "failed": 0, "rate": 0, "today_success": 0}
 
-    if "Timestamp" in df.columns:
-        df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
-    
     total = len(df)
-    success = len(df[df["Status"] == "SUCCESS"]) if "Status" in df.columns else 0
-    failed = len(df[df["Status"] == "FAILED"]) if "Status" in df.columns else 0
+    success = len(df[df["Status"] == "SUCCESS"])
+    failed = len(df[df["Status"] == "FAILED"])
     rate = (success / total * 100) if total > 0 else 0
     
     today = datetime.now().date()
-    if "Timestamp" in df.columns and not df.empty:
-        today_df = df[df["Timestamp"].dt.date == today] if not df.empty else pd.DataFrame()
-        today_success = len(today_df[today_df["Status"] == "SUCCESS"]) if not today_df.empty else 0
-    else:
-        today_success = 0
+    today_df = df[df["Timestamp"].dt.date == today] if not df.empty else pd.DataFrame()
+    today_success = len(today_df[today_df["Status"] == "SUCCESS"]) if not today_df.empty else 0
 
     return {"total": total, "success": success, "failed": failed, "rate": round(rate, 1), "today_success": today_success}
 
@@ -117,13 +90,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Load data and get stats
+# Load data
+df = load_logs()
 stats = get_stats(df)
 
-# Show debug info if no data
+# Show message if no data
 if df.empty:
-    st.warning("⚠️ No logs file found or file is empty. Waiting for GitHub Actions to process emails and commit logs.")
-    st.info("📌 Make sure your GitHub Actions workflow is running and has the commit step enabled.")
+    st.info("📭 No data available. Reports will appear here once processed via GitHub Actions.")
     st.stop()
 
 # KPI Cards
@@ -141,40 +114,55 @@ with c5:
 
 st.markdown("---")
 
-# Only show charts if there's data
-if not df.empty and len(df) > 0:
-    # Recent Reports
-    st.markdown('<div class="section-header">📨 Recent Activity</div>', unsafe_allow_html=True)
-    recent = df.sort_values("Timestamp", ascending=False).head(15)
-    if not recent.empty:
-        display_cols = ["Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"]
-        available_cols = [col for col in display_cols if col in recent.columns]
-        display = recent[available_cols].copy()
-        display.columns = ["Time", "Status", "Dept", "Employee", "Report Date", "Reason"][:len(available_cols)]
-        if "Time" in display.columns:
-            display["Time"] = display["Time"].dt.strftime("%d-%b %I:%M:%S %p")
-        st.dataframe(display, use_container_width=True, hide_index=True)
+# Recent Reports
+st.markdown('<div class="section-header">📨 Recent Activity</div>', unsafe_allow_html=True)
+recent = df.sort_values("Timestamp", ascending=False).head(15)
+if not recent.empty:
+    display = recent[["Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"]].copy()
+    display.columns = ["Time", "Status", "Dept", "Employee", "Report Date", "Reason"]
+    display["Time"] = display["Time"].dt.strftime("%d-%b %I:%M:%S %p")
+    st.dataframe(display, use_container_width=True, hide_index=True)
 
-    st.markdown("---")
+st.markdown("---")
 
-    # Trend Chart
-    st.markdown('<div class="section-header">📈 Daily Trend</div>', unsafe_allow_html=True)
-    if "Timestamp" in df.columns:
-        trend = df.dropna(subset=["Timestamp"]).assign(Date=lambda d: d["Timestamp"].dt.date).groupby(["Date", "Status"]).size().reset_index(name="Count")
-        if not trend.empty:
-            fig = px.bar(trend, x="Date", y="Count", color="Status", color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444"}, text="Count")
-            fig.update_layout(height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True)
+# Trend Chart
+st.markdown('<div class="section-header">📈 Daily Trend</div>', unsafe_allow_html=True)
+trend = df.dropna(subset=["Timestamp"]).assign(Date=lambda d: d["Timestamp"].dt.date).groupby(["Date", "Status"]).size().reset_index(name="Count")
+if not trend.empty:
+    fig = px.bar(trend, x="Date", y="Count", color="Status", color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444"}, text="Count")
+    fig.update_layout(height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig, use_container_width=True)
 
-    # Department Distribution
-    st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
-    if "Department" in df.columns and "Status" in df.columns:
-        dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
-        if not dept_data.empty:
-            dept_data.columns = ["Department", "Count"]
-            fig = px.pie(dept_data, names="Department", values="Count", color="Department", color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"}, hole=0.4)
-            fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True)
+# Department Distribution
+st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
+dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
+if not dept_data.empty:
+    dept_data.columns = ["Department", "Count"]
+    fig = px.pie(dept_data, names="Department", values="Count", color="Department", color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"}, hole=0.4)
+    fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig, use_container_width=True)
+
+# Top Contributors
+st.markdown('<div class="section-header">🏆 Top Contributors</div>', unsafe_allow_html=True)
+top_emp = df[df["Status"] == "SUCCESS"]["Employee_Name"].value_counts().head(8).reset_index()
+if not top_emp.empty:
+    top_emp.columns = ["Employee", "Reports"]
+    fig = px.bar(top_emp, x="Reports", y="Employee", orientation="h", color="Reports", color_continuous_scale="blues", text="Reports")
+    fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig, use_container_width=True)
+
+# Failure Analysis (only if there are failures)
+fail_df = df[df["Status"] == "FAILED"]
+if not fail_df.empty:
+    st.markdown('<div class="section-header">⚠️ Failure Analysis</div>', unsafe_allow_html=True)
+    errors = fail_df["Reason"].str[:80].value_counts().head(8).reset_index()
+    if not errors.empty:
+        errors.columns = ["Error", "Count"]
+        fig = px.bar(errors, x="Count", y="Error", orientation="h", color="Count", color_continuous_scale="reds", text="Count")
+        fig.update_layout(height=280, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
+        with st.expander("📋 Recent Failures"):
+            st.dataframe(fail_df[["Timestamp", "Employee_Name", "Reason"]].head(10), use_container_width=True, hide_index=True)
 
 # Footer
 st.markdown("""
