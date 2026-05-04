@@ -1,6 +1,6 @@
 """
 dashboard.py — Report Automation Dashboard
-Refresh Button clears all data and resets to zero
+Refresh Button clears logs file AND resets dashboard to zero
 """
 
 import os
@@ -32,6 +32,23 @@ div[data-testid="stMetric"] .stMetricValue { color: #ffffff !important; }
 """, unsafe_allow_html=True)
 
 
+def clear_logs_file():
+    """Clear the contents of processing_logs.csv while keeping headers"""
+    log_path = "Working_Report_Editor/logs/processing_logs.csv"
+    
+    if os.path.exists(log_path):
+        # Keep only the headers, remove all data rows
+        headers = ["Timestamp", "Email_ID", "Email_Subject", "Sender_Email", 
+                   "Sender_Name", "Received_Time", "Status", "Department", 
+                   "Employee_Name", "Date", "Reason", "Processing_Time_Sec"]
+        
+        # Write just the headers back to the file
+        df_empty = pd.DataFrame(columns=headers)
+        df_empty.to_csv(log_path, index=False)
+        return True
+    return False
+
+
 def load_logs():
     """Load processing logs from CSV file"""
     log_path = "Working_Report_Editor/logs/processing_logs.csv"
@@ -57,13 +74,16 @@ def get_stats(df: pd.DataFrame) -> dict:
     rate = (success / total * 100) if total > 0 else 0
     
     today = datetime.now().date()
-    today_df = df[df["Timestamp"].dt.date == today] if not df.empty else pd.DataFrame()
-    today_success = len(today_df[today_df["Status"] == "SUCCESS"]) if not today_df.empty else 0
+    if not df.empty and "Timestamp" in df.columns:
+        today_df = df[df["Timestamp"].dt.date == today]
+        today_success = len(today_df[today_df["Status"] == "SUCCESS"]) if not today_df.empty else 0
+    else:
+        today_success = 0
 
     return {"total": total, "success": success, "failed": failed, "rate": round(rate, 1), "today_success": today_success}
 
 
-# Initialize session state for reset flag
+# Initialize session state
 if "reset_dashboard" not in st.session_state:
     st.session_state.reset_dashboard = False
 
@@ -73,8 +93,9 @@ with st.sidebar:
     st.markdown("## ⚙️ Dashboard Controls")
     st.markdown("---")
     
-    # Refresh button - when clicked, sets reset flag to True
     if st.button("🔄 Refresh Data", use_container_width=True):
+        # Clear the actual CSV file
+        clear_logs_file()
         st.session_state.reset_dashboard = True
         st.cache_data.clear()
         st.rerun()
@@ -82,6 +103,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 👥 Employee Registry")
     st.metric("Sales Team", len(SALES_EMPLOYEES))
+    st.markdown("### 👥 HR Team")
     st.metric("HR Team", len(HR_EMPLOYEES))
     st.markdown("---")
     st.markdown("### 📅 Schedule Info")
@@ -99,24 +121,24 @@ st.markdown("""
 
 # Check if reset was triggered
 if st.session_state.reset_dashboard:
-    # Show fresh/empty state
     st.session_state.reset_dashboard = False
     
-    # KPI Cards - ALL ZEROS
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
+    # Show fresh/empty state
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
         st.metric("📧 Total Processed", 0)
-    with c2:
+    with col2:
         st.metric("✅ Success", 0)
-    with c3:
+    with col3:
         st.metric("❌ Failed", 0)
-    with c4:
+    with col4:
         st.metric("📈 Success Rate", "0%")
-    with c5:
+    with col5:
         st.metric("📅 Today's Success", 0)
     
     st.markdown("---")
-    st.info("🔄 Dashboard has been reset. New data will appear after the next GitHub Actions run.")
+    st.success("✅ Dashboard has been reset. The log file has been cleared. New data will appear after the next GitHub Actions run.")
+    st.info("📌 Tip: Run a manual workflow from GitHub Actions to process new emails.")
     st.stop()
 
 # Normal data load
@@ -143,57 +165,70 @@ with c5:
 
 st.markdown("---")
 
-# Recent Reports (only show if there's data)
+# Recent Reports
 st.markdown('<div class="section-header">📨 Recent Activity</div>', unsafe_allow_html=True)
 recent = df.sort_values("Timestamp", ascending=False).head(15)
 if not recent.empty:
-    display = recent[["Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"]].copy()
-    display.columns = ["Time", "Status", "Dept", "Employee", "Report Date", "Reason"]
-    display["Time"] = display["Time"].dt.strftime("%d-%b %I:%M:%S %p")
+    display_cols = ["Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"]
+    available_cols = [col for col in display_cols if col in recent.columns]
+    display = recent[available_cols].copy()
+    display.columns = ["Time", "Status", "Dept", "Employee", "Report Date", "Reason"][:len(available_cols)]
+    if "Time" in display.columns:
+        display["Time"] = display["Time"].dt.strftime("%d-%b %I:%M:%S %p")
     st.dataframe(display, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
 # Trend Chart
 st.markdown('<div class="section-header">📈 Daily Trend</div>', unsafe_allow_html=True)
-trend = df.dropna(subset=["Timestamp"]).assign(Date=lambda d: d["Timestamp"].dt.date).groupby(["Date", "Status"]).size().reset_index(name="Count")
-if not trend.empty:
-    fig = px.bar(trend, x="Date", y="Count", color="Status", color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444"}, text="Count")
-    fig.update_layout(height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
+if "Timestamp" in df.columns and not df.empty:
+    trend = df.dropna(subset=["Timestamp"]).assign(Date=lambda d: d["Timestamp"].dt.date).groupby(["Date", "Status"]).size().reset_index(name="Count")
+    if not trend.empty:
+        fig = px.bar(trend, x="Date", y="Count", color="Status", 
+                     color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444"}, 
+                     text="Count")
+        fig.update_layout(height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
 
 # Department Distribution
 st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
-dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
-if not dept_data.empty:
-    dept_data.columns = ["Department", "Count"]
-    fig = px.pie(dept_data, names="Department", values="Count", color="Department", color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"}, hole=0.4)
-    fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig, use_container_width=True)
+if "Department" in df.columns and "Status" in df.columns:
+    dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
+    if not dept_data.empty:
+        dept_data.columns = ["Department", "Count"]
+        fig = px.pie(dept_data, names="Department", values="Count", 
+                     color="Department", 
+                     color_discrete_map={"Sales": "#3b82f6", "HR": "#a855f7"}, 
+                     hole=0.4)
+        fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
+        st.plotly_chart(fig, use_container_width=True)
 
-# Top Contributors (only show if there are successes)
+# Top Contributors
 success_df = df[df["Status"] == "SUCCESS"]
 if not success_df.empty:
     st.markdown('<div class="section-header">🏆 Top Contributors</div>', unsafe_allow_html=True)
     top_emp = success_df["Employee_Name"].value_counts().head(8).reset_index()
     if not top_emp.empty:
         top_emp.columns = ["Employee", "Reports"]
-        fig = px.bar(top_emp, x="Reports", y="Employee", orientation="h", color="Reports", color_continuous_scale="blues", text="Reports")
+        fig = px.bar(top_emp, x="Reports", y="Employee", orientation="h", 
+                     color="Reports", color_continuous_scale="blues", text="Reports")
         fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True)
 
-# Failure Analysis (only if there are failures)
+# Failure Analysis
 fail_df = df[df["Status"] == "FAILED"]
 if not fail_df.empty:
     st.markdown('<div class="section-header">⚠️ Failure Analysis</div>', unsafe_allow_html=True)
-    errors = fail_df["Reason"].str[:80].value_counts().head(8).reset_index()
+    errors = fail_df["Reason"].astype(str).str[:80].value_counts().head(8).reset_index()
     if not errors.empty:
         errors.columns = ["Error", "Count"]
-        fig = px.bar(errors, x="Count", y="Error", orientation="h", color="Count", color_continuous_scale="reds", text="Count")
+        fig = px.bar(errors, x="Count", y="Error", orientation="h", 
+                     color="Count", color_continuous_scale="reds", text="Count")
         fig.update_layout(height=280, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True)
         with st.expander("📋 Recent Failures"):
-            st.dataframe(fail_df[["Timestamp", "Employee_Name", "Reason"]].head(10), use_container_width=True, hide_index=True)
+            st.dataframe(fail_df[["Timestamp", "Employee_Name", "Reason"]].head(10), 
+                        use_container_width=True, hide_index=True)
 
 # Footer
 st.markdown("""
