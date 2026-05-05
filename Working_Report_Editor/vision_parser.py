@@ -50,6 +50,7 @@ RULES:
 - Duration is ALWAYS associated with Total Phone Calls (look for stopwatch icon 🕐 or time format)
 - Convert "28m 10s" → "00:28:10"
 - Convert "1h 10m 7s" → "01:10:07"
+- Convert "1h 45m" → "01:45:00" (when seconds missing)
 - If you see "57m 43s" → "00:57:43"
 - Use 0 if you cannot find a number
 - Use "00:00:00" if you cannot find duration
@@ -76,8 +77,8 @@ class VisionParser:
             w, h = img.size
             logger.info(f"Original image size: {w}x{h}")
             
-            # Focus on the top portion (0-40%) where summary data lives
-            crop_height = int(h * 0.4)
+            # Focus on the top portion (0-45%) where summary data lives
+            crop_height = int(h * 0.45)
             img = img.crop((0, 0, w, crop_height))
             logger.info(f"Cropped to summary section: {img.size}")
 
@@ -109,7 +110,17 @@ class VisionParser:
                 logger.warning("Could not parse JSON, using fallback")
                 return self._fallback_extraction(img)
 
-            return self._clean(data)
+            cleaned_data = self._clean(data)
+            
+            # NEW: Check for suspicious identical results (caching/quota issues)
+            # If Gemini returns 100/27/00:28:10 (suspicious default), force fallback
+            if (cleaned_data.get("Total Phone Calls") == 100 and 
+                cleaned_data.get("Connected Calls") == 27 and 
+                cleaned_data.get("Total Phone Calls Duration") == "00:28:10"):
+                logger.warning("⚠️ Gemini returned suspicious default values (100/27/00:28:10) - likely quota/caching issue")
+                return self._fallback_extraction(img)
+            
+            return cleaned_data
 
         except Exception as exc:
             logger.error(f"Image processing failed: {exc}")
@@ -130,13 +141,19 @@ class VisionParser:
             connected_match = re.search(r'Connected Calls[:\s]*(\d+)', text, re.IGNORECASE)
             connected = int(connected_match.group(1)) if connected_match else 0
             
-            # Extract Duration (look for pattern like "28m 10s")
+            # Extract Duration (look for pattern like "28m 10s" or "1h 45m")
             duration_match = re.search(r'(\d+)m\s*(\d+)s', text)
             if duration_match:
                 m, s = int(duration_match.group(1)), int(duration_match.group(2))
                 duration = f"00:{m:02d}:{s:02d}"
             else:
-                duration = "00:00:00"
+                # Try "1h 45m" format
+                duration_match = re.search(r'(\d+)h\s*(\d+)m', text)
+                if duration_match:
+                    h, m = int(duration_match.group(1)), int(duration_match.group(2))
+                    duration = f"{h:02d}:{m:02d}:00"
+                else:
+                    duration = "00:00:00"
             
             return {
                 "Total Phone Calls": total_calls,
@@ -191,11 +208,17 @@ class VisionParser:
             h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
 
-        # Handle "1h 28m" format
+        # Handle "1h 45m" format (missing seconds)
         match = re.search(r'(\d+)h\s*(\d+)m', duration_str, re.IGNORECASE)
         if match:
             h, m = int(match.group(1)), int(match.group(2))
             return f"{h:02d}:{m:02d}:00"
+
+        # Handle "45m" format
+        match = re.search(r'(\d+)m', duration_str, re.IGNORECASE)
+        if match and 'h' not in duration_str:
+            m = int(match.group(1))
+            return f"00:{m:02d}:00"
 
         # Handle existing HH:MM:SS
         match = re.search(r'(\d{2}):(\d{2}):(\d{2})', duration_str)
