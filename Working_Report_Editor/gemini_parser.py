@@ -182,11 +182,28 @@ class GeminiParser:
             return {
                 "employee_name": name,
                 "department": "HR",
-                "Total Calls": grab(["total calls", "calls", "total dial"]),
-                "Connected Calls": grab(["connected calls", "connected"]),
+                # Fix: Look for "Total Dialed" AND "Total Calls" for HR
+                "Total Calls": grab([
+                    "total calls", "total dial", "total dials", "total dialed", 
+                    "calls", "total connected", "connected calls"
+                ]),
+                "Connected Calls": grab([
+                    "connected calls", "connected", "total connected", "conn"
+                ]),
                 "Duration": dur,
-                "Tomorrow Interview Lineups": grab(["tomorrow interview lineups", "interview lineups", "tomorrow lineups", "lineups"]),
-                "Interview Held": grab(["interview held", "interviews held", "held"]),
+                # Fix: Look for various lineups formats
+                "Tomorrow Interview Lineups": grab([
+                    "tomorrow interview lineups", "interview lineups", 
+                    "tomorrow lineups", "lineups", "total line ups for tomorrow",
+                    "total line ups", "line ups for tomorrow", "lineups for tomorrow",
+                    "total lineups for tomorrow", "tomorrow lineups count"
+                ]),
+                # Fix: Look for various interview held formats
+                "Interview Held": grab([
+                    "interview held", "interviews held", "held", "today held",
+                    "today interview held", "interview done", "interviews done",
+                    "today held interviews", "held interviews"
+                ]),
             }
 
         return None
