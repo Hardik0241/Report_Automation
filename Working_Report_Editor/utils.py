@@ -77,7 +77,7 @@ def validate_date_string(date_str: str) -> Tuple[bool, Optional[str], str]:
 
 
 # ─────────────────────────────────────────────
-# Duration Helpers
+# Duration Helpers (IMPROVED)
 # ─────────────────────────────────────────────
 
 def parse_duration(raw: str) -> str:
@@ -87,6 +87,7 @@ def parse_duration(raw: str) -> str:
     Handles all these formats (and combinations):
       "1h 20m 45s"   "1hr 20min"   "1h20m"   "20m 45sec"
       "1h"           "30m"         "45s"
+      "1h 45m"       "1h 45m"      "45m"     (missing seconds)
       "02:30:45"     "30:45"       "00:36:35"
       bare integer   "90"          (treated as seconds)
     Falls back to "00:00:00" on failure.
