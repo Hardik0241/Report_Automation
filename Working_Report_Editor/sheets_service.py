@@ -1,6 +1,6 @@
 """
 sheets_service.py — Google Sheets operations with Calibri font, size 13, center alignment
-Handles: Not Sent (no email), Invalid Report (screenshot mismatch), actual data
+Handles: Not Sent (no email), Invalid Report (screenshot mismatch), Quota Error (API limit), actual data
 Status column ONLY for Sales department
 """
 
@@ -213,7 +213,7 @@ class SheetsService:
                     if field == "Report Status":
                         continue
                     if col - 1 < len(all_values[row_num - 1]) and all_values[row_num - 1][col - 1].strip():
-                        if all_values[row_num - 1][col - 1].strip() not in ["", "Not Sent", "Invalid"]:
+                        if all_values[row_num - 1][col - 1].strip() not in ["", "Not Sent", "Invalid", "Quota Error"]:
                             has_data = True
                             break
 
@@ -266,6 +266,47 @@ class SheetsService:
         ws.update(f"{col_letter}{row_num}", [["Invalid"]], value_input_option="USER_ENTERED")
         self._apply_formatting(ws)
         logger.info(f"Marked {employee_name} as 'Invalid' for {date_str}")
+
+    @with_retry()
+    def mark_quota_error(self, department: str, date_str: str, employee_name: str) -> None:
+        """Mark a specific employee's report as 'Quota Error' when Gemini API quota is exceeded"""
+        if department != "Sales":
+            return
+
+        ws = self._get_worksheet(department, date_str)
+        
+        # Find the status column
+        headers = ws.row_values(1)
+        status_col = None
+        for i, header in enumerate(headers, start=1):
+            if header == "Report Status":
+                status_col = i
+                break
+        
+        if status_col is None:
+            # Add status column at the end
+            status_col = len(headers) + 1
+            ws.update_cell(1, status_col, "Report Status")
+        
+        all_values = ws.get_all_values()
+        row_num = None
+
+        for i, row in enumerate(all_values[1:], start=2):
+            row_date = row[0].strip() if len(row) > 0 else ""
+            row_name = row[1].strip() if len(row) > 1 else ""
+            if row_date == date_str and row_name.lower() == employee_name.lower():
+                row_num = i
+                break
+
+        if not row_num:
+            logger.warning(f"Row not found for {employee_name} on {date_str}")
+            return
+
+        # Update the status column with "Quota Error"
+        col_letter = gspread.utils.rowcol_to_a1(row_num, status_col).rstrip("0123456789")
+        ws.update(f"{col_letter}{row_num}", [["Quota Error"]], value_input_option="USER_ENTERED")
+        self._apply_formatting(ws)
+        logger.info(f"Marked {employee_name} as 'Quota Error' for {date_str}")
 
     def list_sheets(self, department: str) -> List[str]:
         return [ws.title for ws in self._spreadsheet(department).worksheets()]
