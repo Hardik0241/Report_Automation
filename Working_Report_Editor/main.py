@@ -133,6 +133,7 @@ class ReportProcessor:
                         if any(att.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg']):
                             screenshot_data = self.vision.parse_screenshot(att)
                             if screenshot_data:
+                                logger.info(f"📸 Screenshot parsed for {canonical_name}: {screenshot_data}")
                                 break
                 except Exception as e:
                     if "429" in str(e) or "quota" in str(e).lower():
@@ -150,6 +151,9 @@ class ReportProcessor:
                     screen_calls = screenshot_data.get("Total Phone Calls", 0)
                     screen_connected = screenshot_data.get("Connected Calls", 0)
                     screen_duration = screenshot_data.get("Total Phone Calls Duration", "00:00:00")
+                    
+                    logger.info(f"📧 Email values for {canonical_name}: Calls={email_calls}, Connected={email_connected}, Duration={email_duration}")
+                    logger.info(f"📸 Screenshot values for {canonical_name}: Calls={screen_calls}, Connected={screen_connected}, Duration={screen_duration}")
                     
                     if (email_calls != screen_calls or 
                         email_connected != screen_connected or 
