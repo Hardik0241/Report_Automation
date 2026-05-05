@@ -1,6 +1,6 @@
 """
 main.py — Production pipeline orchestrator
-ALWAYS writes email body values to sheets, adds Report Status column for Sales
+Always writes email body values. Marks "Quota Error" when API fails.
 """
 
 import logging
@@ -52,15 +52,12 @@ class ReportProcessor:
         
         for email, name in SALES_EMAIL_MAP.items():
             if email.lower() == sender_lower:
-                logger.info(f"✅ Matched Sales employee: {name}")
                 return ("Sales", name)
         
         for email, name in HR_EMAIL_MAP.items():
             if email.lower() == sender_lower:
-                logger.info(f"✅ Matched HR employee: {name}")
                 return ("HR", name)
         
-        logger.warning(f"❌ No department match for: {sender_email}")
         return (None, None)
 
     def process_email(self, email: Dict) -> Dict:
@@ -124,19 +121,28 @@ class ReportProcessor:
             if not ok:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
-            # Initialize report status (for Sales only)
-            report_status = "Valid"
-            
-            # Screenshot validation for Sales only (determines status, doesn't block writing)
+            # Initialize status - will be overwritten if screenshot validation happens
+            report_status = None
+            quota_error = False
+
+            # Screenshot validation for Sales only
             if dept == "Sales" and attachments:
                 screenshot_data = None
-                for att in attachments:
-                    if any(att.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg']):
-                        screenshot_data = self.vision.parse_screenshot(att)
-                        if screenshot_data:
-                            break
+                try:
+                    for att in attachments:
+                        if any(att.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg']):
+                            screenshot_data = self.vision.parse_screenshot(att)
+                            if screenshot_data:
+                                break
+                except Exception as e:
+                    if "429" in str(e) or "quota" in str(e).lower():
+                        quota_error = True
+                        report_status = "Quota Error"
+                        logger.warning(f"⚠️ Quota error during screenshot parsing for {canonical_name}")
+                    else:
+                        logger.warning(f"⚠️ Error parsing screenshot: {e}")
                 
-                if screenshot_data:
+                if screenshot_data and not quota_error:
                     email_calls = email_data.get("Total Dialed", 0)
                     email_connected = email_data.get("Total Connected", 0)
                     email_duration = email_data.get("Duration", "00:00:00")
@@ -150,11 +156,16 @@ class ReportProcessor:
                         email_duration != screen_duration):
                         report_status = "Invalid"
                         logger.warning(f"⚠️ Screenshot mismatch for {canonical_name}")
-                else:
-                    logger.warning(f"⚠️ No screenshot parsed for {canonical_name}")
-
-            # Add status to email_data
-            email_data["report_status"] = report_status
+                    else:
+                        report_status = "Valid"
+                elif not quota_error and not screenshot_data:
+                    report_status = "No Screenshot"
+            
+            # Add status to email_data (if status is set)
+            if report_status:
+                email_data["report_status"] = report_status
+            elif quota_error:
+                email_data["report_status"] = "Quota Error"
 
             # Ensure sheet rows exist and write data (ALWAYS write email values)
             self.sheets.ensure_date_for_all_employees(dept, date_str)
@@ -167,9 +178,11 @@ class ReportProcessor:
             key = (dept, date_str)
             self._write_buffer.setdefault(key, []).append((row_num, email_data))
 
-            # Mark invalid in status column separately if needed
+            # Mark invalid in status column only if it's a REAL mismatch (not quota error)
             if dept == "Sales" and report_status == "Invalid":
                 self.sheets.mark_invalid_report(dept, date_str, canonical_name)
+            elif dept == "Sales" and quota_error:
+                self.sheets.mark_quota_error(dept, date_str, canonical_name)
 
             return _success(dept, canonical_name, date_str)
 
