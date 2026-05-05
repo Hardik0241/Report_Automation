@@ -34,11 +34,10 @@ div[data-testid="stMetric"] .stMetricValue { color: #ffffff !important; }
 
 def clear_logs_file():
     """Clear the contents of processing_logs.csv while keeping headers"""
-    # Try multiple possible paths
     possible_paths = [
-        "logs/processing_logs.csv",                           # Root logs folder
-        "Working_Report_Editor/logs/processing_logs.csv",    # Inside Working_Report_Editor
-        "../logs/processing_logs.csv",                       # Parent directory
+        "logs/processing_logs.csv",
+        "Working_Report_Editor/logs/processing_logs.csv",
+        "../logs/processing_logs.csv",
     ]
     
     headers = ["Timestamp", "Email_ID", "Email_Subject", "Sender_Email", 
@@ -50,7 +49,6 @@ def clear_logs_file():
         if os.path.exists(log_path):
             df_empty = pd.DataFrame(columns=headers)
             df_empty.to_csv(log_path, index=False)
-            print(f"Cleared: {log_path}")
             cleared = True
     
     return cleared
@@ -115,7 +113,6 @@ with st.sidebar:
     st.markdown("---")
     
     if st.button("🔄 Refresh Data", use_container_width=True):
-        # Clear the actual CSV file
         clear_logs_file()
         st.session_state.reset_dashboard = True
         st.cache_data.clear()
@@ -197,18 +194,7 @@ if not recent.empty:
 
 st.markdown("---")
 
-# Trend Chart
-st.markdown('<div class="section-header">📈 Daily Trend</div>', unsafe_allow_html=True)
-if "Timestamp" in df.columns and not df.empty:
-    trend = df.dropna(subset=["Timestamp"]).assign(Date=lambda d: d["Timestamp"].dt.date).groupby(["Date", "Status"]).size().reset_index(name="Count")
-    if not trend.empty:
-        fig = px.bar(trend, x="Date", y="Count", color="Status", 
-                     color_discrete_map={"SUCCESS": "#22c55e", "FAILED": "#ef4444"}, 
-                     text="Count")
-        fig.update_layout(height=350, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, use_container_width=True)
-
-# Department Distribution
+# Department Distribution (Only chart remaining)
 st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
 if "Department" in df.columns and "Status" in df.columns:
     dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
@@ -220,33 +206,6 @@ if "Department" in df.columns and "Status" in df.columns:
                      hole=0.4)
         fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True)
-
-# Top Contributors
-success_df = df[df["Status"] == "SUCCESS"]
-if not success_df.empty:
-    st.markdown('<div class="section-header">🏆 Top Contributors</div>', unsafe_allow_html=True)
-    top_emp = success_df["Employee_Name"].value_counts().head(8).reset_index()
-    if not top_emp.empty:
-        top_emp.columns = ["Employee", "Reports"]
-        fig = px.bar(top_emp, x="Reports", y="Employee", orientation="h", 
-                     color="Reports", color_continuous_scale="blues", text="Reports")
-        fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, use_container_width=True)
-
-# Failure Analysis
-fail_df = df[df["Status"] == "FAILED"]
-if not fail_df.empty:
-    st.markdown('<div class="section-header">⚠️ Failure Analysis</div>', unsafe_allow_html=True)
-    errors = fail_df["Reason"].astype(str).str[:80].value_counts().head(8).reset_index()
-    if not errors.empty:
-        errors.columns = ["Error", "Count"]
-        fig = px.bar(errors, x="Count", y="Error", orientation="h", 
-                     color="Count", color_continuous_scale="reds", text="Count")
-        fig.update_layout(height=280, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
-        st.plotly_chart(fig, use_container_width=True)
-        with st.expander("📋 Recent Failures"):
-            st.dataframe(fail_df[["Timestamp", "Employee_Name", "Reason"]].head(10), 
-                        use_container_width=True, hide_index=True)
 
 # Footer
 st.markdown("""
