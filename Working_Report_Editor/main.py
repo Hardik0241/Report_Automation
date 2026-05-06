@@ -1,6 +1,7 @@
 """
 main.py — Production pipeline orchestrator
 Always writes email body values. Marks "Quota Error" when API fails.
+Duplicate check is FIRST to prevent re-processing same email.
 """
 
 import logging
@@ -32,6 +33,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Used for tracking duplicates within the same run (temporary)
 PROCESSED_EMAILS = set()
 
 
@@ -63,10 +65,6 @@ class ReportProcessor:
     def process_email(self, email: Dict) -> Dict:
         t0 = time.time()
         email_id = email.get("id", "")
-        
-        if email_id in PROCESSED_EMAILS:
-            return {"status": "SKIPPED"}
-
         subject = email.get("subject", "")
         body = email.get("body", "")
         attachments = email.get("attachments", [])
@@ -75,6 +73,24 @@ class ReportProcessor:
         received_at = email.get("received_at", datetime.now())
         received_ms = email.get("received_ms", 0)
         preview = (subject or body)[:120]
+
+        # ─────────────────────────────────────────────
+        # 1. DUPLICATE CHECK - FIRST AND FOREMOST!
+        # ─────────────────────────────────────────────
+        if self.tracker.is_duplicate(email_hash):
+            self.tracker.log_status(
+                preview, "DUPLICATE", email_id,
+                processing_time=time.time() - t0,
+                sender_email=sender_email,
+                received_time=received_at,
+            )
+            logger.info(f"🚫 DUPLICATE skipped: {subject}")
+            return {"status": "DUPLICATE"}
+
+        # Also check within same run (temporary cache)
+        if email_id in PROCESSED_EMAILS:
+            logger.info(f"⏭️ Already processed in this run: {email_id}")
+            return {"status": "SKIPPED"}
 
         logger.info(f"📧 Processing: {sender_email}")
 
@@ -88,6 +104,7 @@ class ReportProcessor:
 
         def _success(dept: str, emp: str, date_str: str) -> Dict:
             PROCESSED_EMAILS.add(email_id)
+            # Mark as processed in persistent cache
             self.tracker.mark_processed(email_hash)
             self.tracker.log_status(
                 preview, "SUCCESS", email_id, dept, emp, date_str,
@@ -95,10 +112,6 @@ class ReportProcessor:
                 sender_name=emp, received_time=received_at,
             )
             return {"status": "SUCCESS", "department": dept, "employee": emp, "date": date_str}
-
-        if self.tracker.is_duplicate(email_hash):
-            self.tracker.log_status(preview, "DUPLICATE", email_id)
-            return {"status": "DUPLICATE"}
 
         try:
             email_data = self.parser.parse_email(body)
