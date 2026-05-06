@@ -3,35 +3,65 @@
 ## Project Structure
 Report_Automation/
 ├── .github/
+
 │ └── workflows/
+
 │ └── scheduler.yml ← GitHub Actions scheduler (runs every 30 min, 7 PM - 11:59 PM IST)
+
 ├── Working_Report_Editor/
+
 │ ├── main.py ← Pipeline orchestrator
+
 │ ├── dashboard.py ← Streamlit monitoring dashboard
+
 │ ├── config.py ← All configuration settings
+
 │ ├── config.yaml ← Model configuration
+
 │ ├── gmail_reader.py ← Gmail fetch + attachment download (READ ONLY)
+
 │ ├── gemini_parser.py ← Email body → structured data (Gemini + regex fallback)
+
 │ ├── vision_parser.py ← Callyzer screenshot → data (Gemini Vision)
+
 │ ├── sheets_service.py ← Google Sheets read/write (Calibri 13, black text, borders)
+
 │ ├── validator.py ← Name fuzzy-match, date check, field validation
+
 │ ├── tracker.py ← CSV logging + permanent duplicate detection
+
 │ ├── error_handler.py ← Custom exceptions + retry decorator
+
 │ ├── utils.py ← Date/duration/email helpers
+
 │ ├── test_connection.py ← Smoke tests (run before going live)
+
 │ ├── encode_token.py ← Encode token.pickle for GitHub secrets
+
 │ ├── get_refresh_token.py ← Get OAuth refresh token
+
 │ ├── scheduler.py ← Local scheduler (for local deployment)
+
 │ ├── requirements.txt ← Python dependencies
+
 │ ├── runtime.txt ← Python version (3.11)
+
 │ ├── .python-version ← Python version for GitHub Actions
+
 │ ├── .env.example ← Copy to .env and fill values
+
 │ └── logs/
+
 │ ├── processing_logs.csv ← Success/failure logs (auto-committed to GitHub)
+
 │ ├── error_logs.jsonl ← Detailed error logs
+
 │ └── duplicate_cache.json ← Permanent duplicate tracking (24-hour window)
+
 ├── .gitignore ← Git ignore rules (allows processing_logs.csv)
+
 ├── LICENSE
+
 └── README.md
 text
 
