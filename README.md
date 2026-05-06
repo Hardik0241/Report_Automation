@@ -63,10 +63,6 @@ Report_Automation/
 ├── LICENSE
 
 └── README.md
-text
-
----
-
 ## 📋 System Overview
 
 This automated system reads daily work reports from Gmail, extracts data using Gemini AI, validates against Callyzer screenshots (for Sales), and writes structured data to Google Sheets.
