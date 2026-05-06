@@ -3,15 +3,54 @@ utils.py — Shared utility functions: date extraction, duration parsing, etc.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
 
 from config import DATE_IN_SUBJECT_FORMAT, DATE_PATTERNS, SHEET_NAME_FORMAT
+
+# IST timezone (UTC + 5:30)
+IST = timezone(timedelta(hours=5, minutes=30))
 
 
 # ─────────────────────────────────────────────
 # Date Helpers
 # ─────────────────────────────────────────────
+
+def utc_to_ist(utc_dt: datetime) -> datetime:
+    """Convert UTC datetime to IST (UTC + 5:30)"""
+    if utc_dt.tzinfo is None:
+        utc_dt = utc_dt.replace(tzinfo=timezone.utc)
+    return utc_dt.astimezone(IST)
+
+
+def format_ist_time(dt: datetime) -> str:
+    """Format datetime to IST string"""
+    ist_dt = utc_to_ist(dt)
+    return ist_dt.strftime("%d-%m-%Y %I:%M:%S %p")
+
+
+def received_timestamp_to_date(timestamp_ms: int) -> str:
+    """
+    Convert Gmail internalDate (milliseconds since epoch) to DD-MM-YYYY string in IST.
+    Used for Sales emails — we use the received date, not the subject date.
+    """
+    utc_dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+    ist_dt = utc_to_ist(utc_dt)
+    return ist_dt.strftime("%d-%m-%Y")
+
+
+def received_timestamp_to_datetime(timestamp_ms: int) -> datetime:
+    """Convert Gmail internalDate (ms) to a datetime object in IST."""
+    utc_dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+    return utc_to_ist(utc_dt)
+
+
+def received_timestamp_to_ist_string(timestamp_ms: int) -> str:
+    """Convert Gmail timestamp to IST readable string."""
+    utc_dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc)
+    ist_dt = utc_to_ist(utc_dt)
+    return ist_dt.strftime("%d-%m-%Y %I:%M:%S %p")
+
 
 def extract_date_from_subject(subject: str) -> Optional[str]:
     """
@@ -28,20 +67,6 @@ def extract_date_from_subject(subject: str) -> Optional[str]:
             if normalized:
                 return normalized
     return None
-
-
-def received_timestamp_to_date(timestamp_ms: int) -> str:
-    """
-    Convert Gmail internalDate (milliseconds since epoch) to DD-MM-YYYY string.
-    Used for Sales emails — we use the received date, not the subject date.
-    """
-    dt = datetime.fromtimestamp(timestamp_ms / 1000)
-    return dt.strftime("%d-%m-%Y")
-
-
-def received_timestamp_to_datetime(timestamp_ms: int) -> datetime:
-    """Convert Gmail internalDate (ms) to a datetime object."""
-    return datetime.fromtimestamp(timestamp_ms / 1000)
 
 
 def _normalize_date(raw: str) -> Optional[str]:
