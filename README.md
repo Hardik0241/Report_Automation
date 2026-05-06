@@ -1,6 +1,5 @@
 # 📊 Report Automation System — Production Setup Guide
 
-## Project Structure
 Report_Automation/
 ├── .github/
 │ └── workflows/
@@ -33,7 +32,6 @@ Report_Automation/
 ├── .gitignore ← Git ignore rules (allows processing_logs.csv)
 ├── LICENSE
 └── README.md
-
 text
 
 ---
