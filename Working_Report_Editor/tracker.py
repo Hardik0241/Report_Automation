@@ -1,5 +1,6 @@
 """
 tracker.py — Email processing tracker with proper logging and duplicate detection
+Prevents processing same email multiple times
 """
 
 import csv
@@ -84,7 +85,11 @@ class Tracker:
             logger.error(f"Could not save duplicate cache: {exc}")
 
     def is_duplicate(self, email_hash: str) -> bool:
-        """Check if email has been processed within the duplicate window"""
+        """
+        Check if email has been processed within the duplicate window.
+        Returns True if email was already processed (even if failed).
+        Prevents re-processing same email.
+        """
         if not email_hash:
             return False
         cache = self._load_cache()
@@ -92,25 +97,38 @@ class Tracker:
         if not last_str:
             return False
         last_dt = datetime.fromisoformat(last_str)
+        # Check if processed within window (24 hours by default)
         return datetime.now() - last_dt < timedelta(hours=DUPLICATE_WINDOW_HOURS)
 
     def mark_processed(self, email_hash: str) -> None:
-        """Mark email as processed in cache"""
+        """
+        Mark email as processed in cache.
+        Once marked, it won't be processed again within the window.
+        """
         if not email_hash:
             return
         cache = self._load_cache()
         cache[email_hash] = datetime.now().isoformat()
-        # Prune old entries
+        
+        # Prune old entries (older than 2× the window) to keep cache clean
         cutoff = datetime.now() - timedelta(hours=DUPLICATE_WINDOW_HOURS * 2)
         cache = {k: v for k, v in cache.items() if datetime.fromisoformat(v) > cutoff}
         self._save_cache(cache)
+        logger.info(f"Marked email {email_hash[:16]}... as processed")
+
+    def is_processed(self, email_hash: str) -> bool:
+        """Alias for is_duplicate - checks if email was already processed"""
+        return self.is_duplicate(email_hash)
 
     def log_status(self, email_preview: str, status: str, email_id: str = "",
                    department: str = "", employee_name: str = "", date: str = "",
                    reason: str = "", processing_time: float = 0.0,
                    sender_email: str = "", sender_name: str = "",
                    received_time: Optional[datetime] = None) -> None:
-        """Write a log entry to CSV"""
+        """
+        Write a log entry to CSV.
+        Does NOT create duplicate entries because of duplicate check before processing.
+        """
         received_iso = received_time.isoformat() if received_time else ""
         row = [
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
