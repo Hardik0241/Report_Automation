@@ -18,6 +18,9 @@ from googleapiclient.errors import HttpError
 from config import GMAIL_QUERY, GMAIL_USER_ID, MAX_EMAILS_PER_RUN, GMAIL_SCOPES
 from error_handler import EmailFetchError, with_retry
 
+# Import IST timestamp converter
+from utils import received_timestamp_to_datetime
+
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"}
@@ -137,7 +140,8 @@ class GmailReader:
                 body = "\n".join(body_parts)
 
                 received_ms = int(msg.get("internalDate", 0))
-                received_at = datetime.fromtimestamp(received_ms / 1000) if received_ms else datetime.now()
+                # UPDATED: Convert UTC timestamp to IST
+                received_at = received_timestamp_to_datetime(received_ms) if received_ms else datetime.now()
 
                 emails.append({
                     "id": msg_stub["id"],
