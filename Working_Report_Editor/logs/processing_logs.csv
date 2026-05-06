@@ -1,3 +1,1 @@
 Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,Department,Employee_Name,Date,Reason,Processing_Time_Sec
-2026-05-06 12:21:32,19dfd28fd7c842cb,Daily report,ruwaida.hredujam@gmail.com,Ruwaida,2026-05-06T12:00:01,SUCCESS,HR,Ruwaida,06-05-2026,,8.91
-2026-05-06 12:21:40,19dfd28fb68279e1,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-05-06T12:00:01,SUCCESS,HR,Mehvish,06-05-2026,,8.04
