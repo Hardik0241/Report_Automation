@@ -96,10 +96,11 @@ This automated system reads daily work reports from Gmail, extracts data using G
 
 ## Step 1 — Install Dependencies
 
-```bash
+
 cd Working_Report_Editor
 pip install -r requirements.txt
-Step 2 — Google Cloud Setup (One-time)
+
+## Step 2 — Google Cloud Setup (One-time)
 2.1 Create Project & Enable APIs
 Go to console.cloud.google.com
 
