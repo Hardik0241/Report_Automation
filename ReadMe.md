@@ -71,10 +71,11 @@ This automated system reads daily work reports from Gmail, extracts data using G
 
 ## Step 1 — Install Dependencies
 
-```bash
 cd Working_Report_Editor
 pip install -r requirements.txt
-Step 2 — Google Cloud Setup (One-time)
+
+
+## Step 2 — Google Cloud Setup (One-time)
 2.1 Create Project & Enable APIs
 Go to console.cloud.google.com
 
@@ -124,14 +125,16 @@ Rename to credentials.json
 2.5 Share Google Sheets
 Open each spreadsheet (Sales + HR) → Share → Add the service account email with Editor access.
 
-Step 3 — Get Gemini API Key
+
+## Step 3 — Get Gemini API Key
 Go to aistudio.google.com
 
 Click Get API Key
 
 Copy the key (starts with AIza)
 
-Step 4 — Configure GitHub Secrets
+
+## Step 4 — Configure GitHub Secrets
 Go to your GitHub repository → Settings → Secrets and variables → Actions → Add these secrets:
 
 Secret Name	Value
@@ -145,10 +148,13 @@ REFRESH_TOKEN	OAuth refresh token (from get_refresh_token.py)
 How to find Spreadsheet ID:
 text
 https://docs.google.com/spreadsheets/d/THIS_IS_YOUR_ID/edit
-Step 5 — Configure Streamlit Cloud Secrets
+
+
+## Step 5 — Configure Streamlit Cloud Secrets
 If deploying dashboard to Streamlit Cloud, add the same secrets in Streamlit Cloud → Settings → Secrets.
 
-Step 6 — Update Employee Lists
+
+## Step 6 — Update Employee Lists
 Edit config.py:
 
 python
@@ -175,7 +181,9 @@ HR_EMAIL_MAP = {
     "ruwaida.hredujam@gmail.com": "Ruwaida",
     # ... add all HR employees
 }
-Step 7 — Configure Schedule
+
+
+## Step 7 — Configure Schedule
 The scheduler runs on GitHub Actions:
 
 Time (IST)	Action
@@ -186,13 +194,16 @@ To modify schedule, edit .github/workflows/scheduler.yml:
 yaml
 - cron: '30,0 13-18 * * *'   # Every 30 min from 13:30 to 18:30 UTC
 - cron: '30 18 * * *'          # Final run at 18:30 UTC
-Step 8 — Run Smoke Tests
+
+
+## Step 8 — Run Smoke Tests
 bash
 cd Working_Report_Editor
 python test_connection.py
 All 5 tests should pass before continuing.
 
-Step 9 — Deploy
+
+## Step 9 — Deploy
 Local / Manual Run
 bash
 python main.py
@@ -201,6 +212,7 @@ bash
 streamlit run dashboard.py
 GitHub Actions (Automatic)
 Push to GitHub - scheduler runs automatically. No manual intervention needed.
+
 
 📧 Email Format Guidelines
 Sales Department (Recommended Format)
@@ -305,6 +317,8 @@ Gmail 0 emails found	No unread emails from allowed senders	Check email is unread
 Dashboard shows 0	Logs file not committed	Check GitHub Actions logs, ensure commit step runs
 Duplicate entries in logs	Same email processed multiple times	Fixed by permanent duplicate cache
 HR emails detected as Sales	Missing HR keywords	Add "hr", "interview", "recruitment" to email body
+
+
 🔧 Configuration Tweaks
 Reduce Quota Usage
 In config.py:
@@ -325,6 +339,8 @@ In main.py, add at the top:
 
 python
 SKIP_SCREENSHOT_VALIDATION = True
+
+
 📝 File Descriptions
 File	Purpose
 main.py	Main orchestrator - processes emails, validates, writes to sheets
@@ -341,6 +357,8 @@ scheduler.py	Local scheduler (for local deployment)
 config.py	All configuration settings
 test_connection.py	Smoke tests
 .github/workflows/scheduler.yml	GitHub Actions workflow (runs every 30 min)
+
+
 🚨 Support
 If you encounter issues:
 
@@ -352,8 +370,10 @@ Run python test_connection.py locally
 
 Verify all secrets are correctly set in GitHub
 
+
 📜 License
 This project is proprietary and confidential.
+
 
 ✅ Final Checklist
 Python 3.11 installed
