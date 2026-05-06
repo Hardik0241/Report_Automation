@@ -1,6 +1,7 @@
 """
 gemini_parser.py — Parse email body into structured data using Gemini.
 Handles extra text after values, flexible formats.
+HR keywords prioritized over Sales for correct department detection.
 """
 
 import json
@@ -37,6 +38,7 @@ For an HR report, look for:
 - "interview", "recruitment", "candidate", "screening", "lineup"
 - "interview held", "interviews held", "held"
 - "tomorrow interview lineups", "lineups"
+- "today held", "line ups for tomorrow"
 
 For SALES report:
 {
@@ -62,8 +64,8 @@ For HR report:
 Rules:
 - Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
-- If the email is about calls/dialer numbers → Sales
-- If the email is about interviews/recruitment → HR
+- If the email contains HR keywords (interview, held, lineup) → HR
+- If the email only contains call/dialer numbers → Sales
 
 Email content:
 """
@@ -138,22 +140,29 @@ class GeminiParser:
     def _detect_department(text: str) -> str:
         t = text.lower()
         
-        # Check Sales keywords FIRST (priority for emails with call data)
-        sales_keywords = ["sales", "callyzer", "dialer", "prospect", "dialed", "dial", 
-                          "outgoing", "total dialed", "total connected", "connected calls", 
-                          "duration", "total dial", "total calls", "calls made"]
-        for kw in sales_keywords:
-            if kw in t:
-                logger.info(f"Department detected: Sales (keyword: '{kw}')")
-                return "Sales"
-        
-        # Then check HR keywords
-        hr_keywords = ["hr", "recruitment", "interview", "hiring", "lineup", 
-                       "candidate", "screening", "interview held", "tomorrow interview"]
+        # HR KEYWORDS - HIGHEST PRIORITY (check these FIRST)
+        # These are strong indicators of HR reports
+        hr_keywords = [
+            "hr", "recruitment", "interview", "hiring", "lineup", 
+            "candidate", "screening", "interview held", "tomorrow interview",
+            "today held", "line ups for tomorrow", "total line ups", 
+            "interview lineups", "held interviews", "held-"
+        ]
         for kw in hr_keywords:
             if kw in t:
                 logger.info(f"Department detected: HR (keyword: '{kw}')")
                 return "HR"
+        
+        # Sales keywords - ONLY if no HR keywords found
+        sales_keywords = [
+            "sales", "callyzer", "dialer", "prospect", "dialed", "dial", 
+            "outgoing", "total dialed", "total connected", "connected calls", 
+            "duration", "total dial", "total calls", "calls made"
+        ]
+        for kw in sales_keywords:
+            if kw in t:
+                logger.info(f"Department detected: Sales (keyword: '{kw}')")
+                return "Sales"
         
         logger.info("Department detection: Unknown (no keywords found)")
         return "Unknown"
@@ -173,7 +182,7 @@ class GeminiParser:
                     rf"(?i){kw_esc}[:\-=]?\s*(\d+)",              # Total dial-134
                     rf"(?i){kw_esc}\s+(\d+)",                     # Total Dialed 134
                     rf"(?i){kw_esc}[\s]*[-:=][\s]*(\d+)",         # Total Dialed - 134
-                    rf"(?i){kw_esc}\s*[:\-=]?\s*(\d+)\s*[^\d]",   # 134 followed by non-number (ignores extra text)
+                    rf"(?i){kw_esc}\s*[:\-=]?\s*(\d+)\s*[^\d]",   # 134 followed by non-number
                 ]
                 for pattern in patterns:
                     match = re.search(pattern, text)
@@ -195,17 +204,25 @@ class GeminiParser:
             return {
                 "employee_name": name,
                 "department": "HR",
-                "Total Calls": grab(["total calls", "total dial", "total dials", "total dialed", "calls"]),
-                "Connected Calls": grab(["connected calls", "connected", "total connected"]),
+                # Map "Total Dialed" to "Total Calls" for HR emails
+                "Total Calls": grab([
+                    "total calls", "total dial", "total dials", "total dialed", 
+                    "calls", "total connected", "connected calls"
+                ]),
+                "Connected Calls": grab([
+                    "connected calls", "connected", "total connected", "conn"
+                ]),
                 "Duration": dur,
                 "Tomorrow Interview Lineups": grab([
                     "tomorrow interview lineups", "interview lineups", 
                     "tomorrow lineups", "lineups", "total line ups for tomorrow",
-                    "total line ups", "line ups for tomorrow", "lineups for tomorrow"
+                    "total line ups", "line ups for tomorrow", "lineups for tomorrow",
+                    "line ups", "lineups", "total lineups"
                 ]),
                 "Interview Held": grab([
                     "interview held", "interviews held", "held", "today held",
-                    "today interview held", "interview done", "interviews done"
+                    "today interview held", "interview done", "interviews done",
+                    "held interviews", "today held interviews", "held-"
                 ]),
             }
 
@@ -222,7 +239,7 @@ class GeminiParser:
             'subject', 'forwarded', 'attachment', 'see', 'below',
             'attached', 'please find', 'here is', 'today\'s', 'sales',
             'hr', 'callyzer', 'dialer', 'total', 'connected', 'duration',
-            'kindly check', 'bde', 'prospect'
+            'kindly check', 'bde', 'prospect', 'kfb', 'dear sir'
         ]
         
         for line in text.splitlines():
@@ -242,6 +259,7 @@ class GeminiParser:
                 continue
             # Clean up common prefixes
             line = re.sub(r'^(bde\s*-\s*)', '', line, flags=re.IGNORECASE)
+            line = re.sub(r'^(dear\s+sir\s*-\s*)', '', line, flags=re.IGNORECASE)
             return line
         
         return ""
