@@ -1,6 +1,6 @@
 """
 dashboard.py — Report Automation Dashboard
-Manual Refresh Only | Refresh button reloads fresh data
+Refresh Button clears logs file AND resets dashboard to zero
 """
 
 import os
@@ -29,6 +29,29 @@ div[data-testid="stMetric"] .stMetricValue { color: #ffffff !important; }
 .footer { text-align: center; padding: 1.5rem; margin-top: 2rem; border-top: 1px solid #334155; font-size: 0.7rem; color: #64748b; }
 </style>
 """, unsafe_allow_html=True)
+
+
+def clear_logs_file():
+    """Clear the contents of processing_logs.csv while keeping headers"""
+    possible_paths = [
+        "logs/processing_logs.csv",
+        "Working_Report_Editor/logs/processing_logs.csv",
+        "../logs/processing_logs.csv",
+    ]
+    
+    headers = ["Timestamp", "Email_ID", "Email_Subject", "Sender_Email", 
+               "Sender_Name", "Received_Time", "Status", "Department", 
+               "Employee_Name", "Date", "Reason", "Processing_Time_Sec"]
+    
+    cleared = False
+    for log_path in possible_paths:
+        if os.path.exists(log_path):
+            df_empty = pd.DataFrame(columns=headers)
+            df_empty.to_csv(log_path, index=False)
+            cleared = True
+            print(f"Cleared: {log_path}")
+    
+    return cleared
 
 
 def find_logs_file():
@@ -67,11 +90,19 @@ def get_stats(df: pd.DataFrame) -> dict:
     return {"total": total, "success": success, "failed": failed, "rate": round(rate, 1), "today_success": success}
 
 
+# Initialize session state for reset flag
+if "reset_dashboard" not in st.session_state:
+    st.session_state.reset_dashboard = False
+
+
 with st.sidebar:
     st.markdown("## ⚙️ Dashboard Controls")
     st.markdown("---")
     
     if st.button("🔄 Refresh Data", use_container_width=True):
+        # Clear the actual CSV file
+        clear_logs_file()
+        st.session_state.reset_dashboard = True
         st.cache_data.clear()
         st.rerun()
     
@@ -92,8 +123,33 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Check if reset was triggered
+if st.session_state.reset_dashboard:
+    st.session_state.reset_dashboard = False
+    
+    col1, col2, col3, col4, col5 = st.columns(5)
+    with col1:
+        st.metric("📧 Total Processed", 0)
+    with col2:
+        st.metric("✅ Success", 0)
+    with col3:
+        st.metric("❌ Failed", 0)
+    with col4:
+        st.metric("📈 Success Rate", "0%")
+    with col5:
+        st.metric("📅 Today's Success", 0)
+    
+    st.markdown("---")
+    st.success("✅ Dashboard has been reset. The log file has been cleared.")
+    st.stop()
+
+# Normal data load
 df = load_logs()
 stats = get_stats(df)
+
+if df.empty:
+    st.info("📭 No data available. Reports will appear here automatically after the next scheduled run (7:00 PM - 11:59 PM).")
+    st.stop()
 
 c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
@@ -108,10 +164,6 @@ with c5:
     st.metric("📅 Today's Success", stats["today_success"])
 
 st.markdown("---")
-
-if df.empty:
-    st.info("📭 No data available. Reports will appear here automatically after the next scheduled run (7:00 PM - 11:59 PM).")
-    st.stop()
 
 st.markdown('<div class="section-header">📨 Recent Activity</div>', unsafe_allow_html=True)
 recent = df.sort_values("Timestamp", ascending=False).head(15)
