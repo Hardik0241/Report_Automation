@@ -1,6 +1,6 @@
 """
 dashboard.py — Report Automation Dashboard
-Refresh Button clears logs file AND resets dashboard to zero
+Manual Refresh Only | Refresh button reloads fresh data
 """
 
 import os
@@ -13,7 +13,6 @@ from config import HR_EMPLOYEES, SALES_EMPLOYEES
 
 st.set_page_config(page_title="Report Automation Dashboard", page_icon="📊", layout="wide")
 
-# Dark mode CSS
 st.markdown("""
 <style>
 .stApp { background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%); }
@@ -32,36 +31,12 @@ div[data-testid="stMetric"] .stMetricValue { color: #ffffff !important; }
 """, unsafe_allow_html=True)
 
 
-def clear_logs_file():
-    """Clear the contents of processing_logs.csv while keeping headers"""
-    possible_paths = [
-        "logs/processing_logs.csv",
-        "Working_Report_Editor/logs/processing_logs.csv",
-        "../logs/processing_logs.csv",
-    ]
-    
-    headers = ["Timestamp", "Email_ID", "Email_Subject", "Sender_Email", 
-               "Sender_Name", "Received_Time", "Status", "Department", 
-               "Employee_Name", "Date", "Reason", "Processing_Time_Sec"]
-    
-    cleared = False
-    for log_path in possible_paths:
-        if os.path.exists(log_path):
-            df_empty = pd.DataFrame(columns=headers)
-            df_empty.to_csv(log_path, index=False)
-            cleared = True
-    
-    return cleared
-
-
 def find_logs_file():
-    """Find the actual logs file path"""
     possible_paths = [
         "logs/processing_logs.csv",
         "Working_Report_Editor/logs/processing_logs.csv",
         "../logs/processing_logs.csv",
     ]
-    
     for path in possible_paths:
         if os.path.exists(path):
             return path
@@ -69,14 +44,11 @@ def find_logs_file():
 
 
 def load_logs():
-    """Load processing logs from CSV file"""
     log_path = find_logs_file()
-    
     if log_path is None:
         return pd.DataFrame(columns=[
-            "Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"
+            "Timestamp", "Email_ID", "Status", "Department", "Employee_Name", "Date", "Reason"
         ])
-    
     df = pd.read_csv(log_path)
     if "Timestamp" in df.columns:
         df["Timestamp"] = pd.to_datetime(df["Timestamp"], errors="coerce")
@@ -91,30 +63,15 @@ def get_stats(df: pd.DataFrame) -> dict:
     success = len(df[df["Status"] == "SUCCESS"])
     failed = len(df[df["Status"] == "FAILED"])
     rate = (success / total * 100) if total > 0 else 0
-    
-    today = datetime.now().date()
-    if not df.empty and "Timestamp" in df.columns:
-        today_df = df[df["Timestamp"].dt.date == today]
-        today_success = len(today_df[today_df["Status"] == "SUCCESS"]) if not today_df.empty else 0
-    else:
-        today_success = 0
 
-    return {"total": total, "success": success, "failed": failed, "rate": round(rate, 1), "today_success": today_success}
+    return {"total": total, "success": success, "failed": failed, "rate": round(rate, 1), "today_success": success}
 
 
-# Initialize session state
-if "reset_dashboard" not in st.session_state:
-    st.session_state.reset_dashboard = False
-
-
-# Sidebar
 with st.sidebar:
     st.markdown("## ⚙️ Dashboard Controls")
     st.markdown("---")
     
     if st.button("🔄 Refresh Data", use_container_width=True):
-        clear_logs_file()
-        st.session_state.reset_dashboard = True
         st.cache_data.clear()
         st.rerun()
     
@@ -128,7 +85,6 @@ with st.sidebar:
     st.markdown("---")
     st.caption("📊 Report Automation System | Powered by Gemini AI")
 
-# Main Header
 st.markdown("""
 <div class="dashboard-header">
     <div class="dashboard-title">📊 Report Automation Dashboard</div>
@@ -136,36 +92,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Check if reset was triggered
-if st.session_state.reset_dashboard:
-    st.session_state.reset_dashboard = False
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        st.metric("📧 Total Processed", 0)
-    with col2:
-        st.metric("✅ Success", 0)
-    with col3:
-        st.metric("❌ Failed", 0)
-    with col4:
-        st.metric("📈 Success Rate", "0%")
-    with col5:
-        st.metric("📅 Today's Success", 0)
-    
-    st.markdown("---")
-    st.success("✅ Dashboard has been reset. The log file has been cleared.")
-    st.stop()
-
-# Normal data load
 df = load_logs()
 stats = get_stats(df)
 
-# Show message if no data
-if df.empty:
-    st.info("📭 No data available. Reports will appear here automatically after the next scheduled run (7:00 PM - 11:59 PM).")
-    st.stop()
-
-# KPI Cards
 c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
     st.metric("📧 Total Processed", stats["total"])
@@ -180,21 +109,21 @@ with c5:
 
 st.markdown("---")
 
-# Recent Reports
+if df.empty:
+    st.info("📭 No data available. Reports will appear here automatically after the next scheduled run (7:00 PM - 11:59 PM).")
+    st.stop()
+
 st.markdown('<div class="section-header">📨 Recent Activity</div>', unsafe_allow_html=True)
 recent = df.sort_values("Timestamp", ascending=False).head(15)
+
 if not recent.empty:
-    display_cols = ["Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"]
-    available_cols = [col for col in display_cols if col in recent.columns]
-    display = recent[available_cols].copy()
-    display.columns = ["Time", "Status", "Dept", "Employee", "Report Date", "Reason"][:len(available_cols)]
-    if "Time" in display.columns:
-        display["Time"] = display["Time"].dt.strftime("%d-%b %I:%M:%S %p")
+    display = recent[["Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"]].copy()
+    display.columns = ["Time", "Status", "Dept", "Employee", "Report Date", "Reason"]
+    display["Time"] = display["Time"].dt.strftime("%d-%b %I:%M:%S %p")
     st.dataframe(display, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
-# Department Distribution (Only chart remaining)
 st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
 if "Department" in df.columns and "Status" in df.columns:
     dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
@@ -207,7 +136,6 @@ if "Department" in df.columns and "Status" in df.columns:
         fig.update_layout(height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True)
 
-# Footer
 st.markdown("""
 <div class="footer">
     ⚡ Report Automation System · Powered by Gemini AI · Automated via GitHub Actions · Emails remain unread
