@@ -11,13 +11,11 @@ import json
 # LOAD SECRETS (Streamlit Cloud or Environment Variables)
 # ============================================================
 try:
-    # Try Streamlit Cloud secrets first
     GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
     SALES_SPREADSHEET_ID = st.secrets["SALES_SPREADSHEET_ID"]
     HR_SPREADSHEET_ID = st.secrets["HR_SPREADSHEET_ID"]
     GOOGLE_CREDENTIALS_DICT = dict(st.secrets["GOOGLE_CREDENTIALS"])
 except Exception:
-    # Fallback to environment variables (GitHub Actions)
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
     SALES_SPREADSHEET_ID = os.environ.get("SALES_SPREADSHEET_ID", "")
     HR_SPREADSHEET_ID = os.environ.get("HR_SPREADSHEET_ID", "")
@@ -37,7 +35,7 @@ SALES_EMPLOYEES = [
 ]
 
 HR_EMPLOYEES = [
-    "Ruwaida", "Amanpreet", "Mehvish", "Salomi"
+    "Ruwaida", "Amanpreet", "Mehvish", "Salomi",
 ]
 
 # ============================================================
@@ -65,7 +63,7 @@ HR_EMAIL_MAP = {
     "ruwaida.hredujam@gmail.com": "Ruwaida",
     "amanpreet.hredujam@gmail.com": "Amanpreet",
     "mehvish.hredujam@gmail.com": "Mehvish",
-    "salomi.hredujam@gmail.com" : "Salomi",
+    "salomi.hredujam@gmail.com": "Salomi",
 }
 
 # ============================================================
@@ -79,6 +77,11 @@ FROM_QUERY = " OR ".join([f"from:{email}" for email in ALL_ALLOWED_EMAILS])
 GMAIL_QUERY = f"({FROM_QUERY}) is:unread"
 
 # ============================================================
+# MAX EMAILS PER RUN (Reduce to avoid quota exhaustion)
+# ============================================================
+MAX_EMAILS_PER_RUN = 5
+
+# ============================================================
 # SALES DEADLINE RULE
 # ============================================================
 SALES_CUTOFF_HOUR = 0
@@ -87,9 +90,9 @@ SALES_CUTOFF_MINUTE = 0
 # ============================================================
 # SCHEDULER ACTIVE WINDOW
 # ============================================================
-ACTIVE_START_HOUR = 14
-ACTIVE_START_MINUTE = 30
-ACTIVE_END_HOUR = 23
+ACTIVE_START_HOUR = 19    # 7:00 PM
+ACTIVE_START_MINUTE = 0
+ACTIVE_END_HOUR = 23      # 11:59 PM
 ACTIVE_END_MINUTE = 59
 
 # ============================================================
@@ -109,7 +112,7 @@ SALES_COLUMN_MAPPING = {
     "Ref Added": 7,
     "status Viewed": 8,
     "Document Collected": 9,
-    "Report Status": 10,  # Column J - ONLY for Sales
+    "Report Status": 10,
 }
 
 # HR column mapping - NO Status column
@@ -129,7 +132,6 @@ HR_HEADERS = list(HR_COLUMN_MAPPING.keys())
 # ============================================================
 # GMAIL CONFIGURATION
 # ============================================================
-MAX_EMAILS_PER_RUN = 50
 GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 GMAIL_USER_ID = "me"
 
