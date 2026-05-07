@@ -114,7 +114,8 @@ class ReportProcessor:
             return {"status": "SUCCESS", "department": dept, "employee": emp, "date": date_str}
 
         try:
-            email_data = self.parser.parse_email(body)
+            # UPDATED: Pass sender_email to parse_email for better department detection
+            email_data = self.parser.parse_email(body, sender_email)
             if not email_data:
                 return _fail("Email body parsing failed")
 
