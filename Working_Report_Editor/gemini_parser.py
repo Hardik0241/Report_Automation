@@ -1,6 +1,6 @@
 """
 gemini_parser.py — Parse email body into structured data using Gemini.
-Handles extra text after values, flexible formats.
+Handles extra text after values, flexible formats, and various field name variations.
 Sender email map takes priority over body keywords for department detection.
 """
 
@@ -187,16 +187,19 @@ class GeminiParser:
         name = self._extract_name(text)
 
         def grab(keywords: list) -> int:
-            """Extract first number after any keyword, ignoring extra text after the number"""
+            """Extract first number after any keyword, handling various formats"""
             for kw in keywords:
                 kw_esc = re.escape(kw)
-                # Multiple patterns to handle various formats
+                # Multiple patterns to handle various formats including ":-" and extra text
                 patterns = [
-                    rf"(?i){kw_esc}\s*[:\-=]?\s*(\d+)",           # Total Dialed: 134
-                    rf"(?i){kw_esc}[:\-=]?\s*(\d+)",              # Total dial-134
-                    rf"(?i){kw_esc}\s+(\d+)",                     # Total Dialed 134
-                    rf"(?i){kw_esc}[\s]*[-:=][\s]*(\d+)",         # Total Dialed - 134
-                    rf"(?i){kw_esc}\s*[:\-=]?\s*(\d+)\s*[^\d]",   # 134 followed by non-number
+                    rf"(?i){kw_esc}\s*[:\-=]?\s*(\d+)",                              # Total Dialed: 134
+                    rf"(?i){kw_esc}[:\-=]?\s*(\d+)",                                 # Total dial-134
+                    rf"(?i){kw_esc}\s+(\d+)",                                        # Total Dialed 134
+                    rf"(?i){kw_esc}[\s]*[-:=][\s]*(\d+)",                            # Total Dialed - 134
+                    rf"(?i){kw_esc}\s*[:\-=]?\s*(\d+)\s*[^\d]",                      # 134 followed by non-number
+                    rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+)",                            # Handles ":-" pattern
+                    rf"(?i){kw_esc}\s*[:=-]\s*(\d+)",                                # Handles ":-" with spaces
+                    rf"(?i){kw_esc}\s*[:\-=]\s*(\d+)\s*\+\s*\d+",                    # Handles "185 +2" - extracts first number
                 ]
                 for pattern in patterns:
                     match = re.search(pattern, text)
@@ -208,17 +211,27 @@ class GeminiParser:
             return {
                 "employee_name": name,
                 "department": "Sales",
-                "Total Dialed": grab(["total dial", "total dials", "total dialed", "total calls", "calls made", "dials"]),
-                "Total Connected": grab(["total connected", "connected calls", "connected"]),
+                # Expanded keywords to catch variations like "Total Dials", "Total dial", "Total duration"
+                "Total Dialed": grab([
+                    "total dial", "total dials", "total dialed", "total calls", 
+                    "calls made", "dials", "total dialed"
+                ]),
+                # Expanded to catch "Connected Calls", "Total connected"
+                "Total Connected": grab([
+                    "total connected", "connected calls", "connected", 
+                    "conn", "total connected", "connected"
+                ]),
                 "Duration": dur,
-                "Prospect": grab(["prospect", "prospects"]),
+                # Expanded to catch "Prospects"
+                "Prospect": grab([
+                    "prospect", "prospects", "pros", "prspct"
+                ]),
             }
 
         elif dept == "HR":
             return {
                 "employee_name": name,
                 "department": "HR",
-                # Map "Total Dialed" to "Total Calls" for HR emails
                 "Total Calls": grab([
                     "total calls", "total dial", "total dials", "total dialed", 
                     "calls", "total connected", "connected calls"
@@ -280,21 +293,53 @@ class GeminiParser:
 
     @staticmethod
     def _extract_duration_flexible(text: str) -> str:
-        """Extract duration, ignoring extra text after it (like 'on hardik phone')"""
-        # First, try to find duration pattern and capture only up to the time
-        patterns = [
-            r'(\d+\s*h(?:r|rs)?\s*\d*\s*m(?:in|ins)?\s*\d*\s*s(?:ec|ecs)?)',  # 1hr 53min
-            r'(\d+\s*h(?:r|rs)?\s*\d*\s*m(?:in|ins)?)',                      # 1hr 53min (no seconds)
-            r'(\d{1,3}:\d{2}:\d{2})',                                         # HH:MM:SS
-            r'(\d{1,3}:\d{2})',                                               # MM:SS
-        ]
+        """Extract duration, handling various formats including '1h', '1 hr 32 min', '1 hr 6m 17 s'"""
+        # Pattern for "1 hr 32 min" (no seconds)
+        match = re.search(r'(\d+)\s*h(?:r|our)?s?\s*(\d+)\s*m(?:in|inute)?s?', text, re.IGNORECASE)
+        if match:
+            h, m = int(match.group(1)), int(match.group(2))
+            return f"{h:02d}:{m:02d}:00"
         
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                duration_str = match.group(1)
-                # Clean up the duration string
-                duration_str = re.sub(r'\s+', ' ', duration_str.strip())
-                return parse_duration(duration_str)
+        # Pattern for "1 hr 6m 17 s" (mixed abbreviations)
+        match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        
+        # Pattern for "1h" (only hours)
+        match = re.search(r'(\d+)\s*h(?:r)?(?!\s*\d+m)', text, re.IGNORECASE)
+        if match:
+            h = int(match.group(1))
+            return f"{h:02d}:00:00"
+        
+        # Pattern for "2h 3m 30s"
+        match = re.search(r'(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        
+        # Pattern for "1h 53min"
+        match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m(?:in)?', text, re.IGNORECASE)
+        if match:
+            h, m = int(match.group(1)), int(match.group(2))
+            return f"{h:02d}:{m:02d}:00"
+        
+        # Pattern for "1hr 53min" (no seconds)
+        match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m(?:in)?(?!\s*\d+s)', text, re.IGNORECASE)
+        if match:
+            h, m = int(match.group(1)), int(match.group(2))
+            return f"{h:02d}:{m:02d}:00"
+        
+        # Standard HH:MM:SS
+        match = re.search(r'(\d{1,3}):(\d{2}):(\d{2})', text)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        
+        # MM:SS
+        match = re.search(r'(\d{1,3}):(\d{2})', text)
+        if match:
+            m, s = int(match.group(1)), int(match.group(2))
+            return f"00:{m:02d}:{s:02d}"
         
         return "00:00:00"
