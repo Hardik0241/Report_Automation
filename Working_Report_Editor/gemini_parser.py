@@ -1,7 +1,7 @@
 """
 gemini_parser.py — Parse email body into structured data using Gemini.
 Handles extra text after values, flexible formats.
-HR keywords prioritized over Sales for correct department detection.
+Sender email map takes priority over body keywords for department detection.
 """
 
 import json
@@ -13,7 +13,7 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning)
 import google.generativeai as genai
 
-from config import GEMINI_API_KEY, GEMINI_MODEL
+from config import GEMINI_API_KEY, GEMINI_MODEL, SALES_EMAIL_MAP, HR_EMAIL_MAP
 from error_handler import with_retry
 from utils import coerce_int, normalize_employee_name, parse_duration, safe_title
 
@@ -76,7 +76,8 @@ class GeminiParser:
         self.model = genai.GenerativeModel(GEMINI_MODEL)
 
     @with_retry()
-    def parse_email(self, body: str) -> Optional[Dict]:
+    def parse_email(self, body: str, sender_email: str = "") -> Optional[Dict]:
+        """Parse email body with optional sender_email for department detection"""
         if not body or not body.strip():
             logger.warning("Empty email body — skipping Gemini call.")
             return None
@@ -98,7 +99,7 @@ class GeminiParser:
         if data is None:
             return None
 
-        return self._clean(data, body)
+        return self._clean(data, body, sender_email)
 
     @staticmethod
     def _extract_json(text: str) -> Optional[Dict]:
@@ -111,10 +112,10 @@ class GeminiParser:
         except json.JSONDecodeError:
             return None
 
-    def _clean(self, data: Dict, original_body: str) -> Dict:
+    def _clean(self, data: Dict, original_body: str, sender_email: str = "") -> Dict:
         dept = data.get("department", "")
         if dept not in ("Sales", "HR"):
-            dept = self._detect_department(original_body)
+            dept = self._detect_department(original_body, sender_email)
         data["department"] = dept
 
         raw_name = data.get("employee_name", "") or ""
@@ -137,11 +138,24 @@ class GeminiParser:
         return data
 
     @staticmethod
-    def _detect_department(text: str) -> str:
+    def _detect_department(text: str, sender_email: str = "") -> str:
         t = text.lower()
         
-        # HR KEYWORDS - HIGHEST PRIORITY (check these FIRST)
-        # These are strong indicators of HR reports
+        # PRIORITY 1: Check sender email map (MOST RELIABLE)
+        if sender_email:
+            sender_lower = sender_email.lower()
+            # Check Sales email map
+            for email in SALES_EMAIL_MAP.keys():
+                if email.lower() == sender_lower:
+                    logger.info(f"Department: Sales (from sender email: {sender_email})")
+                    return "Sales"
+            # Check HR email map
+            for email in HR_EMAIL_MAP.keys():
+                if email.lower() == sender_lower:
+                    logger.info(f"Department: HR (from sender email: {sender_email})")
+                    return "HR"
+        
+        # PRIORITY 2: Check HR keywords in email body
         hr_keywords = [
             "hr", "recruitment", "interview", "hiring", "lineup", 
             "candidate", "screening", "interview held", "tomorrow interview",
@@ -150,10 +164,10 @@ class GeminiParser:
         ]
         for kw in hr_keywords:
             if kw in t:
-                logger.info(f"Department detected: HR (keyword: '{kw}')")
+                logger.info(f"Department detected: HR (body keyword: '{kw}')")
                 return "HR"
         
-        # Sales keywords - ONLY if no HR keywords found
+        # PRIORITY 3: Check Sales keywords in email body
         sales_keywords = [
             "sales", "callyzer", "dialer", "prospect", "dialed", "dial", 
             "outgoing", "total dialed", "total connected", "connected calls", 
@@ -161,7 +175,7 @@ class GeminiParser:
         ]
         for kw in sales_keywords:
             if kw in t:
-                logger.info(f"Department detected: Sales (keyword: '{kw}')")
+                logger.info(f"Department detected: Sales (body keyword: '{kw}')")
                 return "Sales"
         
         logger.info("Department detection: Unknown (no keywords found)")
