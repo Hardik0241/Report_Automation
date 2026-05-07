@@ -3,6 +3,7 @@ pandas
 numpy
 plotly
 pillow
+pytesseract
 
 # Google APIs
 google-api-python-client
