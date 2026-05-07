@@ -45,7 +45,6 @@ class Tracker:
         self._init_cache()
 
     def _init_csv(self):
-        """Initialize CSV with headers if it doesn't exist"""
         try:
             os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
             if not os.path.exists(self.log_path):
@@ -56,7 +55,6 @@ class Tracker:
             logger.error(f"Failed to init CSV: {exc}")
 
     def _init_cache(self):
-        """Initialize duplicate detection cache file"""
         try:
             cache_dir = os.path.dirname(DUPLICATE_CACHE_PATH)
             if cache_dir:
@@ -69,7 +67,6 @@ class Tracker:
             logger.error(f"Failed to init cache: {exc}")
 
     def _load_cache(self) -> Dict:
-        """Load duplicate cache from file"""
         try:
             with open(DUPLICATE_CACHE_PATH, "r") as fh:
                 return json.load(fh)
@@ -77,7 +74,6 @@ class Tracker:
             return {}
 
     def _save_cache(self, cache: Dict) -> None:
-        """Save duplicate cache to file"""
         try:
             with open(DUPLICATE_CACHE_PATH, "w") as fh:
                 json.dump(cache, fh, indent=2)
@@ -85,11 +81,6 @@ class Tracker:
             logger.error(f"Could not save duplicate cache: {exc}")
 
     def is_duplicate(self, email_hash: str) -> bool:
-        """
-        Check if email has been processed within the duplicate window.
-        Returns True if email was already processed (even if failed).
-        Prevents re-processing same email.
-        """
         if not email_hash:
             return False
         cache = self._load_cache()
@@ -97,27 +88,19 @@ class Tracker:
         if not last_str:
             return False
         last_dt = datetime.fromisoformat(last_str)
-        # Check if processed within window (24 hours by default)
         return datetime.now() - last_dt < timedelta(hours=DUPLICATE_WINDOW_HOURS)
 
     def mark_processed(self, email_hash: str) -> None:
-        """
-        Mark email as processed in cache.
-        Once marked, it won't be processed again within the window.
-        """
         if not email_hash:
             return
         cache = self._load_cache()
         cache[email_hash] = datetime.now().isoformat()
-        
-        # Prune old entries (older than 2× the window) to keep cache clean
         cutoff = datetime.now() - timedelta(hours=DUPLICATE_WINDOW_HOURS * 2)
         cache = {k: v for k, v in cache.items() if datetime.fromisoformat(v) > cutoff}
         self._save_cache(cache)
         logger.info(f"Marked email {email_hash[:16]}... as processed")
 
     def is_processed(self, email_hash: str) -> bool:
-        """Alias for is_duplicate - checks if email was already processed"""
         return self.is_duplicate(email_hash)
 
     def log_status(self, email_preview: str, status: str, email_id: str = "",
@@ -125,10 +108,6 @@ class Tracker:
                    reason: str = "", processing_time: float = 0.0,
                    sender_email: str = "", sender_name: str = "",
                    received_time: Optional[datetime] = None) -> None:
-        """
-        Write a log entry to CSV.
-        Does NOT create duplicate entries because of duplicate check before processing.
-        """
         received_iso = received_time.isoformat() if received_time else ""
         row = [
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -145,7 +124,6 @@ class Tracker:
             f"{processing_time:.2f}",
         ]
         try:
-            # Ensure directory exists (in case it was deleted)
             os.makedirs(os.path.dirname(self.log_path), exist_ok=True)
             with open(self.log_path, "a", newline="", encoding="utf-8") as fh:
                 csv.writer(fh).writerow(row)
@@ -154,7 +132,6 @@ class Tracker:
             logger.error(f"Failed to write log: {exc}")
 
     def get_statistics(self) -> Dict:
-        """Return basic statistics from log file"""
         try:
             with open(self.log_path, "r", encoding="utf-8") as fh:
                 rows = list(csv.DictReader(fh))
@@ -173,7 +150,6 @@ class Tracker:
         }
 
     def get_failed_rows(self) -> List[Dict]:
-        """Return list of failed log entries"""
         try:
             with open(self.log_path, "r", encoding="utf-8") as fh:
                 return [r for r in csv.DictReader(fh) if r.get("Status") == "FAILED"]
