@@ -15,3 +15,8 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-05-07 19:14:39,19e02c6c5f87d817,KRA Report,sakibs.edujam@gmail.com,Sakib,2026-05-07T19:40:13+05:30,SUCCESS,Sales,Sakib,07-05-2026,,0.93
 2026-05-07 19:14:40,19e02c6b9e5382fe,Report,apoorva.edujam@gmail.com,Apoorva,2026-05-07T19:40:24+05:30,SUCCESS,Sales,Apoorva,07-05-2026,,0.76
 2026-05-07 19:14:41,19e02c5401c85e49,Report,rajeshp.edujam@gmail.com,Rajesh,2026-05-07T19:38:46+05:30,SUCCESS,Sales,Rajesh,07-05-2026,,1.12
+2026-05-07 20:03:17,19e035a948956ec7,KRA REPORT,dhanshree.edujam@gmail.com,Dhanshree,2026-05-07T22:21:49+05:30,FAILED,Sales,Dhanshree,07-05-2026,"Missing required fields: Total Dialed, Total Connected",0.26
+2026-05-07 20:03:17,19e03312ec6c1726,Calling Report,prafulp.edujam@gmail.com,Praful,2026-05-07T21:36:39+05:30,FAILED,Sales,Praful,07-05-2026,"Missing required fields: Total Dialed, Total Connected",0.10
+2026-05-07 20:03:19,19e02c6c5f87d817,KRA Report,sakibs.edujam@gmail.com,Sakib,2026-05-07T19:40:13+05:30,SUCCESS,Sales,Sakib,07-05-2026,,1.44
+2026-05-07 20:03:20,19e02c6b9e5382fe,Report,apoorva.edujam@gmail.com,Apoorva,2026-05-07T19:40:24+05:30,SUCCESS,Sales,Apoorva,07-05-2026,,1.12
+2026-05-07 20:03:21,19e02c5401c85e49,Report,rajeshp.edujam@gmail.com,Rajesh,2026-05-07T19:38:46+05:30,SUCCESS,Sales,Rajesh,07-05-2026,,1.21
