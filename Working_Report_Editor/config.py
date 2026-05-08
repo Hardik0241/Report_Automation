@@ -77,9 +77,9 @@ FROM_QUERY = " OR ".join([f"from:{email}" for email in ALL_ALLOWED_EMAILS])
 GMAIL_QUERY = f"({FROM_QUERY}) is:unread"
 
 # ============================================================
-# MAX EMAILS PER RUN (Reduce to avoid quota exhaustion)
+# MAX EMAILS PER RUN - Increased to process ALL emails (Sales + HR)
 # ============================================================
-MAX_EMAILS_PER_RUN = 5
+MAX_EMAILS_PER_RUN = 20
 
 # ============================================================
 # SALES DEADLINE RULE
