@@ -31,6 +31,11 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr
+
       - name: Install dependencies
         working-directory: Working_Report_Editor
         run: |
