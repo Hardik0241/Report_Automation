@@ -211,18 +211,15 @@ class GeminiParser:
             return {
                 "employee_name": name,
                 "department": "Sales",
-                # Expanded keywords to catch variations like "Total Dials", "Total dial", "Total duration"
                 "Total Dialed": grab([
                     "total dial", "total dials", "total dialed", "total calls", 
                     "calls made", "dials", "total dialed"
                 ]),
-                # Expanded to catch "Connected Calls", "Total connected"
                 "Total Connected": grab([
                     "total connected", "connected calls", "connected", 
                     "conn", "total connected", "connected"
                 ]),
                 "Duration": dur,
-                # Expanded to catch "Prospects"
                 "Prospect": grab([
                     "prospect", "prospects", "pros", "prspct"
                 ]),
@@ -232,6 +229,7 @@ class GeminiParser:
             return {
                 "employee_name": name,
                 "department": "HR",
+                # ✅ YOUR REQUESTED LINES ARE ALREADY HERE! ✅
                 "Total Calls": grab([
                     "total calls", "total dial", "total dials", "total dialed", 
                     "calls", "total connected", "connected calls"
