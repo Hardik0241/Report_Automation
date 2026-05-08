@@ -77,7 +77,7 @@ FROM_QUERY = " OR ".join([f"from:{email}" for email in ALL_ALLOWED_EMAILS])
 GMAIL_QUERY = f"({FROM_QUERY}) is:unread"
 
 # ============================================================
-# MAX EMAILS PER RUN - Increased to process ALL emails (Sales + HR)
+# MAX EMAILS PER RUN - Process ALL emails
 # ============================================================
 MAX_EMAILS_PER_RUN = 20
 
@@ -101,7 +101,6 @@ ACTIVE_END_MINUTE = 59
 DATE_IN_SUBJECT_FORMAT = "%d-%m-%Y"
 SHEET_NAME_FORMAT = "%b-%Y"
 
-# Sales column mapping - INCLUDES Status column
 SALES_COLUMN_MAPPING = {
     "Date": 1,
     "Employee Name": 2,
@@ -115,7 +114,6 @@ SALES_COLUMN_MAPPING = {
     "Report Status": 10,
 }
 
-# HR column mapping - NO Status column
 HR_COLUMN_MAPPING = {
     "Date": 1,
     "Employee Name": 2,
