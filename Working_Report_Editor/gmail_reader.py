@@ -17,8 +17,6 @@ from googleapiclient.errors import HttpError
 
 from config import GMAIL_QUERY, GMAIL_USER_ID, MAX_EMAILS_PER_RUN, GMAIL_SCOPES
 from error_handler import EmailFetchError, with_retry
-
-# Import IST timestamp converter
 from utils import received_timestamp_to_datetime
 
 logger = logging.getLogger(__name__)
