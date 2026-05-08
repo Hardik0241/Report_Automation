@@ -50,3 +50,17 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-05-08 19:16:23,19e07c84b28e0f3e,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-05-08T13:30:13,SUCCESS,HR,Amanpreet,08-05-2026,,0.69
 2026-05-08 19:16:23,19e07c62627e85c6,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-05-08T13:27:54,SUCCESS,HR,Salomi,08-05-2026,,0.37
 2026-05-08 19:16:23,19e07c5a78f234d3,08/05/2026,sachingodara.edujam@gmail.com,Sachin,2026-05-08T13:27:18,FAILED,Sales,Sachin,08-05-2026,"Missing required fields: Total Dialed, Total Connected",0.10
+2026-05-08 19:56:03,19e08d66bdb5e454,KRA REPORT,dhanshree.edujam@gmail.com,Dhanshree,2026-05-08T18:25:15,SUCCESS,Sales,Dhanshree,08-05-2026,,4.14
+2026-05-08 19:56:03,19e086e57eb32a72,Calling Report,prafulp.edujam@gmail.com,Praful,2026-05-08T16:31:34,FAILED,Sales,Praful,08-05-2026,"Missing required fields: Total Dialed, Total Connected",0.12
+2026-05-08 19:56:04,19e0807b0d081dfe,08/05/26,muskan.edujam@gmail.com,Muskan,2026-05-08T14:39:28,SUCCESS,Sales,Muskan,08-05-2026,,0.83
+2026-05-08 19:56:04,19e0801c4f22fb88,Report,aishwary.edujam@gmail.com,Aishwary,2026-05-08T14:32:59,SUCCESS,Sales,Aishwary,08-05-2026,,0.71
+2026-05-08 19:56:05,19e07ee302400120,Report,rajeshp.edujam@gmail.com,Rajesh,2026-05-08T14:11:37,SUCCESS,Sales,Rajesh,08-05-2026,,0.82
+2026-05-08 19:56:06,19e07d939fce90cd,report,abhijit.edujam@gmail.com,Abhijit,2026-05-08T13:48:45,SUCCESS,Sales,Abhijit,08-05-2026,,1.03
+2026-05-08 19:56:06,19e07d411f031081,Calling report 08/05/26,saylip.edujam@gmail.com,Sayli,2026-05-08T13:43:04,FAILED,Sales,Sayli,08-05-2026,"Missing required fields: Total Dialed, Total Connected",0.10
+2026-05-08 19:56:07,19e07cd4406b6ec9,Report,komals.edujam@gmail.com,Komal,2026-05-08T13:35:39,SUCCESS,Sales,Komal,08-05-2026,,0.76
+2026-05-08 19:56:07,19e07ca4ea63593c,08/05/2026,sachingodara.edujam@gmail.com,Sachin,2026-05-08T13:32:22,FAILED,Sales,Sachin,08-05-2026,"Missing required fields: Total Dialed, Total Connected",0.10
+2026-05-08 19:56:08,19e07ca4a9bf943f,KRA report,manasvi.edujam@gmail.com,Manasvi,2026-05-08T13:32:23,SUCCESS,Sales,Manasvi,08-05-2026,,0.81
+2026-05-08 19:56:09,19e07c88655408af,Reports,apoorva.edujam@gmail.com,Apoorva,2026-05-08T13:30:26,SUCCESS,Sales,Apoorva,08-05-2026,,0.73
+2026-05-08 19:56:09,19e07c84b28e0f3e,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-05-08T13:30:13,SUCCESS,HR,Amanpreet,08-05-2026,,0.66
+2026-05-08 19:56:10,19e07c62627e85c6,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-05-08T13:27:54,SUCCESS,HR,Salomi,08-05-2026,,0.50
+2026-05-08 19:56:10,19e07c5a78f234d3,08/05/2026,sachingodara.edujam@gmail.com,Sachin,2026-05-08T13:27:18,FAILED,Sales,Sachin,08-05-2026,"Missing required fields: Total Dialed, Total Connected",0.10
