@@ -1,6 +1,7 @@
 """
 tracker.py — Email processing tracker with proper logging and duplicate detection
 Prevents processing same email multiple times
+UPDATED: Enhanced duplicate detection with sheet check integration
 """
 
 import csv
