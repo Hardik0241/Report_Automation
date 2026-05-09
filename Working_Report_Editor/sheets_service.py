@@ -2,6 +2,7 @@
 sheets_service.py — Google Sheets operations with Calibri font, size 13, center alignment
 Handles: Not Sent, Invalid Report, Quota Error, actual data
 Formatting: Dark black text (#000000), All borders on data cells
+ADDED: get_column_mapping method for checking existing data
 """
 
 import logging
@@ -65,6 +66,10 @@ class SheetsService:
     @staticmethod
     def sheet_name(date_str: str) -> str:
         return datetime.strptime(date_str, DATE_IN_SUBJECT_FORMAT).strftime(SHEET_NAME_FORMAT)
+    
+    def get_column_mapping(self, department: str) -> Dict:
+        """Return column mapping for the department"""
+        return SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
 
     def _apply_formatting(self, ws: gspread.Worksheet, range_str: str = None) -> None:
         """Apply Calibri font size 13, dark black text, and all borders"""
@@ -72,10 +77,8 @@ class SheetsService:
             if range_str is None:
                 range_str = "A1:Z1000"
             
-            # Parse the range to get sheet ID and cell range
             sheet_id = ws.id
             
-            # Get the bounds of the range
             if ":" in range_str:
                 start_cell, end_cell = range_str.split(":")
                 start_row = int(''.join(filter(str.isdigit, start_cell))) if any(c.isdigit() for c in start_cell) else 1
@@ -88,7 +91,6 @@ class SheetsService:
                 end_row = 1000
                 end_col = "Z"
             
-            # Convert column letters to indices
             def col_to_index(col_letter):
                 index = 0
                 for char in col_letter:
@@ -309,6 +311,7 @@ class SheetsService:
         if status_col is None:
             status_col = len(headers) + 1
             ws.update_cell(1, status_col, "Report Status")
+            self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
         
         all_values = ws.get_all_values()
         row_num = None
@@ -348,6 +351,7 @@ class SheetsService:
         if status_col is None:
             status_col = len(headers) + 1
             ws.update_cell(1, status_col, "Report Status")
+            self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
         
         all_values = ws.get_all_values()
         row_num = None
