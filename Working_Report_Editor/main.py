@@ -3,6 +3,7 @@ main.py — Production pipeline orchestrator
 Always writes email body values. Marks "Quota Error" when API fails.
 Duplicate check is FIRST to prevent re-processing same email.
 NOW WITH: Sheet check before processing to prevent duplicate writes
+UPDATED: Screenshot validation is optional, email is source of truth
 """
 
 import logging
@@ -188,8 +189,9 @@ class ReportProcessor:
             # Initialize status - will be overwritten if screenshot validation happens
             report_status = None
             quota_error = False
+            screenshot_mismatch = False
 
-            # Screenshot validation for Sales only
+            # Screenshot validation for Sales only - OPTIONAL, NOT MANDATORY
             if dept == "Sales" and attachments:
                 screenshot_data = None
                 try:
@@ -207,6 +209,7 @@ class ReportProcessor:
                     else:
                         logger.warning(f"⚠️ Error parsing screenshot: {e}")
                 
+                # ONLY validate if screenshot was successfully parsed
                 if screenshot_data and not quota_error:
                     email_calls = email_data.get("Total Dialed", 0)
                     email_connected = email_data.get("Total Connected", 0)
@@ -219,21 +222,38 @@ class ReportProcessor:
                     logger.info(f"📧 Email values for {canonical_name}: Calls={email_calls}, Connected={email_connected}, Duration={email_duration}")
                     logger.info(f"📸 Screenshot values for {canonical_name}: Calls={screen_calls}, Connected={screen_connected}, Duration={screen_duration}")
                     
-                    if (email_calls != screen_calls or 
-                        email_connected != screen_connected or 
-                        email_duration != screen_duration):
-                        report_status = "Invalid"
-                        logger.warning(f"⚠️ Screenshot mismatch for {canonical_name}")
+                    # Compare only if email values are not zero (email is the source of truth)
+                    if email_calls > 0 or email_connected > 0 or email_duration != "00:00:00":
+                        if (email_calls != screen_calls or 
+                            email_connected != screen_connected or 
+                            email_duration != screen_duration):
+                            screenshot_mismatch = True
+                            logger.warning(f"⚠️ Screenshot mismatch for {canonical_name} - but email values will still be written")
+                            # Don't mark as Invalid - just log the mismatch
+                        else:
+                            report_status = "Valid"
+                            logger.info(f"✅ Screenshot verified for {canonical_name}")
                     else:
-                        report_status = "Valid"
+                        # If email values are zero but screenshot has values, use screenshot values
+                        logger.info(f"📸 Email values were zero, using screenshot values for {canonical_name}")
+                        email_data["Total Dialed"] = screen_calls
+                        email_data["Total Connected"] = screen_connected
+                        email_data["Duration"] = screen_duration
+                        report_status = "Valid (from screenshot)"
                 elif not quota_error and not screenshot_data:
-                    report_status = "No Screenshot"
+                    logger.info(f"📸 No screenshot found for {canonical_name} - skipping validation")
             
             # Add status to email_data
             if report_status:
                 email_data["report_status"] = report_status
             elif quota_error:
                 email_data["report_status"] = "Quota Error"
+            elif screenshot_mismatch:
+                # Log mismatch but don't mark as Invalid - email is source of truth
+                email_data["report_status"] = "Email (screenshot mismatch)"
+                logger.info(f"📊 {canonical_name}: Email values written despite screenshot mismatch")
+            else:
+                email_data["report_status"] = "Email Only"
 
             # Ensure sheet rows exist
             self.sheets.ensure_date_for_all_employees(dept, date_str)
@@ -248,9 +268,8 @@ class ReportProcessor:
             self._write_buffer.setdefault(key, []).append((row_num, email_data))
 
             # Mark invalid in status column only if it's a REAL mismatch (not quota error)
-            if dept == "Sales" and report_status == "Invalid":
-                self.sheets.mark_invalid_report(dept, date_str, canonical_name)
-            elif dept == "Sales" and quota_error:
+            # UPDATED: Removed mark_invalid_report - no longer marking as Invalid based on screenshot mismatch
+            if dept == "Sales" and quota_error:
                 self.sheets.mark_quota_error(dept, date_str, canonical_name)
 
             return _success(dept, canonical_name, date_str)
