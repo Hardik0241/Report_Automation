@@ -1,5 +1,6 @@
 """
 utils.py — Shared utility functions: date extraction, duration parsing, math handling
+UPDATED: Enhanced duration parsing for formats like "53m 7s", "39m 47s"
 """
 
 import re
@@ -65,17 +66,19 @@ def validate_date_string(date_str: str) -> Tuple[bool, Optional[str], str]:
 
 
 # ─────────────────────────────────────────────
-# Enhanced Duration Helpers (Handles addition)
+# Enhanced Duration Helpers (Handles addition AND MM:SS formats)
 # ─────────────────────────────────────────────
 
 def parse_duration(raw: str) -> str:
     """
-    Parse duration string, handling multiple durations added together.
-    Examples:
-    - "1h 18m + 8m 47s + 13m33s + 2m31s + 4m" → sums all durations
+    Parse duration string, handling:
+    - "1h 18m + 8m 47s" → sums all durations
     - "2h 29m 54s + 12m" → 2h 41m 54s
     - "56m 49s" → 00:56:49
+    - "53m 7s" → 00:53:07  <-- FIXED: Now handles this format
+    - "39m 47s" → 00:39:47  <-- FIXED: Now handles this format
     - "1h 20m 13sec" → 01:20:13
+    - "1h 45m" → 01:45:00
     """
     if not raw:
         return "00:00:00"
@@ -119,21 +122,45 @@ def _duration_to_seconds(duration_str: str) -> int:
     if match:
         return int(match.group(1)) * 3600
     
-    # Pattern for "56m 49s"
+    # Pattern for "56m 49s" (minutes and seconds)
     match = re.search(r'(\d+)\s*m(?:in|inute)?s?\s*(\d+)\s*s(?:ec|econd)?s?', duration_str, re.IGNORECASE)
     if match:
         m, s = int(match.group(1)), int(match.group(2))
         return m * 60 + s
     
-    # Pattern for "56m"
+    # Pattern for "53m 7s" (minutes and seconds with single digit seconds) - FIXED
+    match = re.search(r'(\d+)\s*m\s*(\d+)\s*s', duration_str, re.IGNORECASE)
+    if match:
+        m, s = int(match.group(1)), int(match.group(2))
+        return m * 60 + s
+    
+    # Pattern for "39m 47s" (another variation) - FIXED
+    match = re.search(r'(\d+)m\s*(\d+)s', duration_str, re.IGNORECASE)
+    if match:
+        m, s = int(match.group(1)), int(match.group(2))
+        return m * 60 + s
+    
+    # Pattern for "56m" (just minutes)
     match = re.search(r'(\d+)\s*m(?:in|inute)?s?', duration_str, re.IGNORECASE)
     if match:
         return int(match.group(1)) * 60
     
-    # Pattern for "47s"
+    # Pattern for "47s" (just seconds)
     match = re.search(r'(\d+)\s*s(?:ec|econd)?s?', duration_str, re.IGNORECASE)
     if match:
         return int(match.group(1))
+    
+    # Pattern for MM:SS format (e.g., "53:07")
+    match = re.search(r'(\d{2}):(\d{2})', duration_str)
+    if match:
+        m, s = int(match.group(1)), int(match.group(2))
+        return m * 60 + s
+    
+    # Pattern for HH:MM:SS format
+    match = re.search(r'(\d{2}):(\d{2}):(\d{2})', duration_str)
+    if match:
+        h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        return h * 3600 + m * 60 + s
     
     return 0
 
