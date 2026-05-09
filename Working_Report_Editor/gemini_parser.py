@@ -1,8 +1,6 @@
 """
 gemini_parser.py — Parse email body into structured data using Gemini.
-Handles math in numbers (121+19), multiple durations, extra text after values.
-Sender email map takes priority over body keywords for department detection.
-UPDATED: Fixed fallback duration extraction for HR department
+UPDATED: Enhanced fallback for Sales duration parsing and "Leave" detection
 """
 
 import json
@@ -30,17 +28,17 @@ Return ONLY a JSON object — no markdown, no explanation.
 IMPORTANT: First determine if this is a SALES or HR report based on content.
 
 For a SALES report, look for:
-- "total dialed", "total dial", "dials", "total calls", "calls made"
+- "total dialed", "total dial", "dials", "total calls", "calls made", "dial"
 - "connected", "conn", "total connected", "connected calls"  
-- "duration", "dur", "talk time"
-- "prospect", "prospects"
+- "duration", "dur", "talk time", "time"
+- "prospect", "prospects", "pros"
+- BDE name patterns: "BDE Name:", "BDE -", "BDE:"
 
 For an HR report, look for:
 - "interview", "recruitment", "candidate", "screening", "lineup"
 - "interview held", "interviews held", "held"
 - "tomorrow interview lineups", "lineups"
 - "today held", "line ups for tomorrow"
-- "Today Held", "Today Interview Held"
 
 For SALES report:
 {
@@ -66,9 +64,8 @@ For HR report:
 Rules:
 - Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
-- If the email contains HR keywords (interview, held, lineup) → HR
-- If the email only contains call/dialer numbers → Sales
-- For HR duration, look for "Duration:" or "Duration is:" followed by format like "39m 47s" or "53m 7s"
+- If the email contains "Leave" or "leave" anywhere, mark as "Leave" and skip.
+- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s"
 
 Email content:
 """
@@ -154,6 +151,24 @@ class GeminiParser:
                     logger.info(f"Department: HR (from sender email: {sender_email})")
                     return "HR"
         
+        # Check for "Leave" first
+        if 'leave' in t:
+            logger.info(f"Department: Sales (Leave detected)")
+            return "Sales"
+        
+        # Sales keywords (more comprehensive)
+        sales_keywords = [
+            "sales", "callyzer", "dialer", "prospect", "dialed", "dial", 
+            "outgoing", "total dialed", "total connected", "connected calls", 
+            "duration", "total dial", "total calls", "calls made",
+            "bde", "bde name", "bde -", "prospects"
+        ]
+        for kw in sales_keywords:
+            if kw in t:
+                logger.info(f"Department detected: Sales (body keyword: '{kw}')")
+                return "Sales"
+        
+        # HR keywords
         hr_keywords = [
             "hr", "recruitment", "interview", "hiring", "lineup", 
             "candidate", "screening", "interview held", "tomorrow interview",
@@ -166,20 +181,21 @@ class GeminiParser:
                 logger.info(f"Department detected: HR (body keyword: '{kw}')")
                 return "HR"
         
-        sales_keywords = [
-            "sales", "callyzer", "dialer", "prospect", "dialed", "dial", 
-            "outgoing", "total dialed", "total connected", "connected calls", 
-            "duration", "total dial", "total calls", "calls made"
-        ]
-        for kw in sales_keywords:
-            if kw in t:
-                logger.info(f"Department detected: Sales (body keyword: '{kw}')")
-                return "Sales"
-        
         logger.info("Department detection: Unknown (no keywords found)")
         return "Unknown"
 
     def _fallback_parse(self, text: str) -> Optional[Dict]:
+        # Check for "Leave" first
+        if 'leave' in text.lower():
+            return {
+                "employee_name": self._extract_name(text),
+                "department": "Sales",
+                "Total Dialed": 0,
+                "Total Connected": 0,
+                "Duration": "00:00:00",
+                "Prospect": 0,
+            }
+        
         dept = self._detect_department(text)
         dur = self._extract_duration_flexible(text)
         name = self._extract_name(text)
@@ -192,11 +208,13 @@ class GeminiParser:
                     rf"(?i){kw_esc}[:\-=]?\s*([\d\s\+]+)",
                     rf"(?i){kw_esc}\s+([\d\s\+]+)",
                     rf"(?i){kw_esc}[\s]*[-:=][\s]*([\d\s\+]+)",
+                    rf"(?i){kw_esc}\s*[:\-=]?\s*(\d+(?:\s*\+\s*\d+)*)",
                 ]
                 for pattern in patterns:
                     match = re.search(pattern, text)
                     if match:
                         value_str = match.group(1)
+                        # Handle addition like "126+10", "163 + 4"
                         if '+' in value_str:
                             parts = re.split(r'\s*\+\s*', value_str)
                             total = 0
@@ -216,7 +234,7 @@ class GeminiParser:
                 "department": "Sales",
                 "Total Dialed": grab([
                     "total dial", "total dials", "total dialed", "total calls", 
-                    "calls made", "dials", "dial", "total dial"
+                    "calls made", "dials", "dial", "total dial", "dial"
                 ]),
                 "Total Connected": grab([
                     "total connected", "connected calls", "connected", 
@@ -259,6 +277,17 @@ class GeminiParser:
 
     @staticmethod
     def _extract_name(text: str) -> str:
+        # First try to find BDE Name pattern
+        bde_patterns = [
+            r'BDE[:\s-]+\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)',
+            r'BDE Name[:\s-]+\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)',
+            r'Name[:\s-]+\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)',
+        ]
+        for pattern in bde_patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        
         ignore_words = [
             'dear', 'hi', 'hello', 'kindly', 'please', 'thanks', 'thank', 
             'regards', 'sincerely', 'best', 'warm', 'good', 'morning',
@@ -267,7 +296,8 @@ class GeminiParser:
             'subject', 'forwarded', 'attachment', 'see', 'below',
             'attached', 'please find', 'here is', 'today\'s', 'sales',
             'hr', 'callyzer', 'dialer', 'total', 'connected', 'duration',
-            'kindly check', 'bde', 'prospect', 'kfb', 'dear sir', 'bde -'
+            'kindly check', 'bde', 'prospect', 'kfb', 'dear sir', 'bde -',
+            'calling', 'prospect', 'edujam', 'gmail', 'com'
         ]
         
         for line in text.splitlines():
@@ -276,92 +306,90 @@ class GeminiParser:
                 continue
             if re.search(r'\d', line):
                 continue
-            if re.search(r'[:=\-]', line):
+            if re.search(r'[:=\-@.]', line):
                 continue
             if len(line) > 50:
-                continue
-            if '@' in line or '.' in line:
                 continue
             line_lower = line.lower()
             if any(word in line_lower for word in ignore_words):
                 continue
             line = re.sub(r'^(bde\s*-\s*)', '', line, flags=re.IGNORECASE)
             line = re.sub(r'^(dear\s+sir\s*-\s*)', '', line, flags=re.IGNORECASE)
-            return line
+            if line.strip():
+                return line
         
         return ""
 
     @staticmethod
     def _extract_duration_flexible(text: str) -> str:
-        """
-        Extract duration from text, handling multiple durations added together.
-        UPDATED: Better handling for HR duration formats like "39m 47s", "53m 7s"
-        """
-        # First, find all duration patterns
-        patterns = [
-            # Pattern for "39m 47s" or "53m 7s" - MOST COMMON FOR HR
-            r'(\d+)\s*m\s*(\d+)\s*s',
-            r'(\d+)m\s*(\d+)s',
-            # Pattern for "1h 18m 47s" - Full pattern
-            r'(\d+\s*h(?:r|our)?s?\s*\d+\s*m(?:in|inute)?s?\s*\d+\s*s(?:ec|econd)?s?)',
-            # Pattern for "1h 18m" - Hours and minutes
-            r'(\d+\s*h(?:r|our)?s?\s*\d+\s*m(?:in|inute)?s?)',
-            # Pattern for "56m 49s" - Minutes and seconds
-            r'(\d+\s*m(?:in|inute)?s?\s*\d+\s*s(?:ec|econd)?s?)',
-            # Pattern for "1h" - Just hours
-            r'(\d+\s*h(?:r|our)?s?)',
-            # Pattern for "56m" - Just minutes
-            r'(\d+\s*m(?:in|inute)?s?)',
-            # Pattern for "47s" - Just seconds
-            r'(\d+\s*s(?:ec|econd)?s?)',
-        ]
-        
-        all_durations = []
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            all_durations.extend(matches)
-        
-        if not all_durations:
-            # Try to find "Duration: 39m 47s" pattern
-            duration_match = re.search(r'Duration[:\s]+(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
-            if duration_match:
-                m, s = int(duration_match.group(1)), int(duration_match.group(2))
-                return f"00:{m:02d}:{s:02d}"
-            
-            # Try to find "Duration is 53m 7s" pattern
-            duration_match = re.search(r'Duration\s+is\s+(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
-            if duration_match:
-                m, s = int(duration_match.group(1)), int(duration_match.group(2))
-                return f"00:{m:02d}:{s:02d}"
-            
+        """Extract duration from text, handling multiple durations added together."""
+        # First, check for "Leave"
+        if 'leave' in text.lower():
             return "00:00:00"
         
-        # For pattern that returns two capture groups (m, s)
-        if len(all_durations) > 0 and isinstance(all_durations[0], tuple) and len(all_durations[0]) == 2:
-            try:
-                m, s = int(all_durations[0][0]), int(all_durations[0][1])
-                return f"00:{m:02d}:{s:02d}"
-            except:
-                pass
+        # Find all duration patterns
+        patterns = [
+            # Pattern for "1h 0m 35s" or "1h 0m 35s"
+            r'(\d+)\s*h(?:r)?s?\s*(\d+)\s*m(?:in)?s?\s*(\d+)\s*s(?:ec)?s?',
+            # Pattern for "1H 15M + 14M" (uppercase with +)
+            r'(\d+)\s*[hH](?:r)?\s*(\d+)\s*[mM]\s*\+\s*(\d+)\s*[mM]',
+            # Pattern for "1 H 31 M" (space between)
+            r'(\d+)\s*[hH]\s*(\d+)\s*[mM]',
+            # Pattern for "1hr 25m 21s"
+            r'(\d+)\s*hr\s*(\d+)\s*m\s*(\d+)\s*s',
+            # Pattern for "1 hr 49 min"
+            r'(\d+)\s*hr\s*(\d+)\s*min',
+            # Pattern for "1h 18m"
+            r'(\d+)\s*h(?:r)?s?\s*(\d+)\s*m(?:in)?s?',
+            # Pattern for "1h 17m 45s"
+            r'(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*s',
+            # Pattern for "56m 49s"
+            r'(\d+)\s*m(?:in)?s?\s*(\d+)\s*s(?:ec)?s?',
+            # Pattern for "53m 7s"
+            r'(\d+)\s*m\s*(\d+)\s*s',
+        ]
         
-        # Sum all durations (handles "1h 18m + 8m 47s" cases)
-        from utils import duration_to_seconds, seconds_to_hms
+        all_matches = []
+        for pattern in patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            all_matches.extend(matches)
+        
+        if not all_matches:
+            # Try to find "Duration:" pattern
+            duration_match = re.search(r'Duration[:\s-]+\s*([^,\n]+)', text, re.IGNORECASE)
+            if duration_match:
+                dur_text = duration_match.group(1).strip()
+                return parse_duration(dur_text)
+            return "00:00:00"
+        
         total_seconds = 0
-        for dur_str in all_durations:
-            # Clean up the duration string
-            if isinstance(dur_str, tuple):
-                # Handle tuple results from regex
-                if len(dur_str) == 2:
-                    try:
-                        m, s = int(dur_str[0]), int(dur_str[1])
+        for match in all_matches:
+            if len(match) == 3:
+                # h, m, s format
+                try:
+                    h, m, s = int(match[0]), int(match[1]), int(match[2])
+                    total_seconds += h * 3600 + m * 60 + s
+                except:
+                    pass
+            elif len(match) == 2:
+                # m, s or h, m format
+                try:
+                    # Check if it looks like hours and minutes (small numbers suggest minutes/seconds)
+                    if int(match[0]) < 24 and int(match[1]) < 60 and 'h' in text.lower():
+                        # Likely hours and minutes
+                        h, m = int(match[0]), int(match[1])
+                        total_seconds += h * 3600 + m * 60
+                    else:
+                        # Likely minutes and seconds
+                        m, s = int(match[0]), int(match[1])
                         total_seconds += m * 60 + s
-                    except:
-                        pass
-            else:
-                dur_str = re.sub(r'\s+', ' ', dur_str.strip())
-                total_seconds += duration_to_seconds(dur_str)
+                except:
+                    pass
         
         if total_seconds > 0:
-            return seconds_to_hms(total_seconds)
+            h = total_seconds // 3600
+            m = (total_seconds % 3600) // 60
+            s = total_seconds % 60
+            return f"{h:02d}:{m:02d}:{s:02d}"
         
         return "00:00:00"
