@@ -4,6 +4,7 @@ Always writes email body values. Marks "Quota Error" when API fails.
 Duplicate check is FIRST to prevent re-processing same email.
 NOW WITH: Sheet check before processing to prevent duplicate writes
 UPDATED: Screenshot validation is optional, email is source of truth
+UPDATED: NO "Quota Error" status saved to sheet - it's a system issue
 """
 
 import logging
@@ -188,7 +189,6 @@ class ReportProcessor:
 
             # Initialize status - will be overwritten if screenshot validation happens
             report_status = None
-            quota_error = False
             screenshot_mismatch = False
 
             # Screenshot validation for Sales only - OPTIONAL, NOT MANDATORY
@@ -202,15 +202,15 @@ class ReportProcessor:
                                 logger.info(f"📸 Screenshot parsed for {canonical_name}: {screenshot_data}")
                                 break
                 except Exception as e:
+                    # Handle quota error silently - don't mark as Quota Error in sheet
                     if "429" in str(e) or "quota" in str(e).lower():
-                        quota_error = True
-                        report_status = "Quota Error"
-                        logger.warning(f"⚠️ Quota error during screenshot parsing for {canonical_name}")
+                        logger.warning(f"⚠️ Quota error during screenshot parsing for {canonical_name} - continuing with email values only")
+                        # DO NOT set report_status - just continue
                     else:
                         logger.warning(f"⚠️ Error parsing screenshot: {e}")
                 
                 # ONLY validate if screenshot was successfully parsed
-                if screenshot_data and not quota_error:
+                if screenshot_data:
                     email_calls = email_data.get("Total Dialed", 0)
                     email_connected = email_data.get("Total Connected", 0)
                     email_duration = email_data.get("Duration", "00:00:00")
@@ -229,7 +229,6 @@ class ReportProcessor:
                             email_duration != screen_duration):
                             screenshot_mismatch = True
                             logger.warning(f"⚠️ Screenshot mismatch for {canonical_name} - but email values will still be written")
-                            # Don't mark as Invalid - just log the mismatch
                         else:
                             report_status = "Valid"
                             logger.info(f"✅ Screenshot verified for {canonical_name}")
@@ -240,20 +239,18 @@ class ReportProcessor:
                         email_data["Total Connected"] = screen_connected
                         email_data["Duration"] = screen_duration
                         report_status = "Valid (from screenshot)"
-                elif not quota_error and not screenshot_data:
+                elif not screenshot_data:
                     logger.info(f"📸 No screenshot found for {canonical_name} - skipping validation")
             
-            # Add status to email_data
+            # Add status to email_data - NEVER set Quota Error in sheet
             if report_status:
                 email_data["report_status"] = report_status
-            elif quota_error:
-                email_data["report_status"] = "Quota Error"
             elif screenshot_mismatch:
                 # Log mismatch but don't mark as Invalid - email is source of truth
                 email_data["report_status"] = "Email (screenshot mismatch)"
                 logger.info(f"📊 {canonical_name}: Email values written despite screenshot mismatch")
             else:
-                email_data["report_status"] = "Email Only"
+                email_data["report_status"] = ""
 
             # Ensure sheet rows exist
             self.sheets.ensure_date_for_all_employees(dept, date_str)
@@ -267,10 +264,11 @@ class ReportProcessor:
             key = (dept, date_str)
             self._write_buffer.setdefault(key, []).append((row_num, email_data))
 
-            # Mark invalid in status column only if it's a REAL mismatch (not quota error)
-            # UPDATED: Removed mark_invalid_report - no longer marking as Invalid based on screenshot mismatch
-            if dept == "Sales" and quota_error:
-                self.sheets.mark_quota_error(dept, date_str, canonical_name)
+            # NO status column updates for system issues (Quota Error) - employee did nothing wrong
+            # Only update status if there's a meaningful validation result
+            if dept == "Sales" and report_status == "Valid":
+                # Optional: You can add a method to mark as Valid if needed
+                pass
 
             return _success(dept, canonical_name, date_str)
 
