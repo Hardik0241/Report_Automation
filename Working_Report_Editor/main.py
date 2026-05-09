@@ -2,6 +2,7 @@
 main.py — Production pipeline orchestrator
 Always writes email body values. Marks "Quota Error" when API fails.
 Duplicate check is FIRST to prevent re-processing same email.
+NOW WITH: Sheet check before processing to prevent duplicate writes
 """
 
 import logging
@@ -62,6 +63,40 @@ class ReportProcessor:
         
         return (None, None)
 
+    def _check_already_in_sheet(self, department: str, employee_name: str, date_str: str) -> bool:
+        """Check if employee already has data in sheet for this date"""
+        try:
+            row_num = self.sheets.find_employee_row(department, date_str, employee_name)
+            if not row_num:
+                return False
+            
+            # Get the row data to check if any data exists
+            ws = self.sheets._get_worksheet(department, date_str)
+            row_data = ws.row_values(row_num)
+            
+            # Check if any numeric column (beyond Date and Employee Name) has data
+            mapping = self.sheets.get_column_mapping(department)
+            for field, col in mapping.items():
+                if field not in ("Date", "Employee Name", "Report Status"):
+                    if col - 1 < len(row_data) and row_data[col - 1].strip():
+                        val = row_data[col - 1].strip()
+                        if val not in ["", "0", "00:00:00", "Not Sent", "Invalid", "Quota Error"]:
+                            logger.info(f"Employee {employee_name} already has data in sheet for {date_str}: {field}={val}")
+                            return True
+            
+            # Also check Report Status column
+            headers = ws.row_values(1)
+            for i, header in enumerate(headers, start=1):
+                if header == "Report Status":
+                    if i - 1 < len(row_data) and row_data[i - 1].strip() in ["Valid", "Invalid", "Quota Error"]:
+                        logger.info(f"Employee {employee_name} already has status {row_data[i - 1]} for {date_str}")
+                        return True
+            
+            return False
+        except Exception as e:
+            logger.warning(f"Error checking sheet for {employee_name}: {e}")
+            return False
+
     def process_email(self, email: Dict) -> Dict:
         t0 = time.time()
         email_id = email.get("id", "")
@@ -114,20 +149,35 @@ class ReportProcessor:
             return {"status": "SUCCESS", "department": dept, "employee": emp, "date": date_str}
 
         try:
-            # UPDATED: Pass sender_email to parse_email for better department detection
-            email_data = self.parser.parse_email(body, sender_email)
-            if not email_data:
-                return _fail("Email body parsing failed")
-
+            # Determine department and employee from sender email
             dept, canonical_name = self._match_sender_to_department(sender_email)
             
             if dept is None:
                 return _fail(f"Sender '{sender_email}' not in department maps")
 
+            # Get date from email received time
+            date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
+            
+            # ─────────────────────────────────────────────
+            # 2. CHECK SHEET BEFORE PROCESSING - PREVENT DUPLICATE WRITES!
+            # ─────────────────────────────────────────────
+            if self._check_already_in_sheet(dept, canonical_name, date_str):
+                logger.info(f"✅ Employee {canonical_name} already has data in sheet for {date_str} - marking as DUPLICATE without reprocessing")
+                self.tracker.mark_processed(email_hash)
+                self.tracker.log_status(
+                    preview, "DUPLICATE", email_id, dept, canonical_name, date_str,
+                    "Already in sheet", processing_time=time.time() - t0,
+                    sender_email=sender_email, sender_name=canonical_name, received_time=received_at,
+                )
+                return {"status": "DUPLICATE", "reason": "Already in sheet"}
+
+            # Parse email body (pass sender_email for better department detection)
+            email_data = self.parser.parse_email(body, sender_email)
+            if not email_data:
+                return _fail("Email body parsing failed", dept=dept, emp=canonical_name, date=date_str)
+
             email_data["department"] = dept
             email_data["employee_name"] = canonical_name
-
-            date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
             email_data["date"] = date_str
 
             # Validate required fields
@@ -179,13 +229,13 @@ class ReportProcessor:
                 elif not quota_error and not screenshot_data:
                     report_status = "No Screenshot"
             
-            # Add status to email_data (if status is set)
+            # Add status to email_data
             if report_status:
                 email_data["report_status"] = report_status
             elif quota_error:
                 email_data["report_status"] = "Quota Error"
 
-            # Ensure sheet rows exist and write data (ALWAYS write email values)
+            # Ensure sheet rows exist
             self.sheets.ensure_date_for_all_employees(dept, date_str)
             self.sheets.ensure_status_column(dept, date_str)
             row_num = self.sheets.find_employee_row(dept, date_str, canonical_name)
@@ -193,6 +243,7 @@ class ReportProcessor:
             if not row_num:
                 return _fail(f"Row not found for {canonical_name}", dept=dept, emp=canonical_name, date=date_str)
 
+            # Add to write buffer
             key = (dept, date_str)
             self._write_buffer.setdefault(key, []).append((row_num, email_data))
 
