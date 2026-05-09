@@ -7,6 +7,8 @@ At midnight (00:00), marks all Sales employees who haven't submitted as "Not Sen
 Deploy this file on GitHub Actions or any server — it runs forever.
 On your local PC: python scheduler.py
 On GitHub Actions: triggered by cron (see .github/workflows/scheduler.yml)
+
+UPDATED: Enhanced Not Sent marking to check actual data presence
 """
 
 import logging
@@ -33,7 +35,7 @@ _marked_not_sent_dates: set = set()
 def is_active_window() -> bool:
     """
     Returns True if current time is within the active window:
-    2:30 PM (14:30) to 11:59 PM (23:59).
+    7:00 PM (19:00) to 11:59 PM (23:59).
     """
     now = datetime.now()
     h, m = now.hour, now.minute
@@ -52,9 +54,10 @@ def run_processor():
     try:
         from main import ReportProcessor
         results = ReportProcessor().run()
-        ok  = sum(1 for r in results if r["status"] == "SUCCESS")
-        bad = sum(1 for r in results if r["status"] == "FAILED")
-        logger.info(f"✅ Done — {ok} success, {bad} failed")
+        ok  = sum(1 for r in results if r.get("status") == "SUCCESS")
+        bad = sum(1 for r in results if r.get("status") == "FAILED")
+        dup = sum(1 for r in results if r.get("status") == "DUPLICATE")
+        logger.info(f"✅ Done — {ok} success, {bad} failed, {dup} duplicate")
     except Exception as exc:
         logger.error(f"Processor error: {exc}", exc_info=True)
 
@@ -72,6 +75,12 @@ def mark_not_sent_deadline():
     try:
         from sheets_service import SheetsService
         sheets = SheetsService()
+        
+        # First ensure all employees have rows for today
+        sheets.ensure_date_for_all_employees("Sales", today)
+        sheets.ensure_status_column("Sales", today)
+        
+        # Then mark Not Sent
         sheets.mark_not_sent("Sales", today)
         _marked_not_sent_dates.add(today)
         logger.info("✅ 'Not Sent' marking complete")
