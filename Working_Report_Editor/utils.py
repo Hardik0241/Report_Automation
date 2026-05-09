@@ -1,6 +1,6 @@
 """
 utils.py — Shared utility functions: date extraction, duration parsing, math handling
-UPDATED: Enhanced duration parsing for formats like "53m 7s", "39m 47s"
+UPDATED: Enhanced duration parsing for ALL formats (Sales + HR)
 """
 
 import re
@@ -66,27 +66,33 @@ def validate_date_string(date_str: str) -> Tuple[bool, Optional[str], str]:
 
 
 # ─────────────────────────────────────────────
-# Enhanced Duration Helpers (Handles addition AND MM:SS formats)
+# Enhanced Duration Helpers (Handles ALL formats)
 # ─────────────────────────────────────────────
 
 def parse_duration(raw: str) -> str:
     """
     Parse duration string, handling:
-    - "1h 18m + 8m 47s" → sums all durations
-    - "2h 29m 54s + 12m" → 2h 41m 54s
-    - "56m 49s" → 00:56:49
-    - "53m 7s" → 00:53:07  <-- FIXED: Now handles this format
-    - "39m 47s" → 00:39:47  <-- FIXED: Now handles this format
-    - "1h 20m 13sec" → 01:20:13
-    - "1h 45m" → 01:45:00
+    - "1h 0m 35s" → 01:00:35
+    - "1H 15M + 14M ON WHATSAPP + 5M ON ANOTHER CALL" → 01:34:00
+    - "1 H 31 M" → 01:31:00
+    - "1hr 25m 21s" → 01:25:21
+    - "1 hr 49 min" → 01:49:00
+    - "1h 17m 45s" → 01:17:45
+    - "53m 7s" → 00:53:07
+    - "39m 47s" → 00:39:47
     """
     if not raw:
         return "00:00:00"
     
-    raw = str(raw).strip().lower()
+    raw = str(raw).strip()
+    
+    # Check if it says "Leave"
+    if 'leave' in raw.lower():
+        return "00:00:00"
     
     # Check if there are multiple durations with "+"
     if '+' in raw:
+        # Split by + and sum all durations
         parts = raw.split('+')
         total_seconds = 0
         for part in parts:
@@ -101,56 +107,71 @@ def parse_duration(raw: str) -> str:
 
 
 def _duration_to_seconds(duration_str: str) -> int:
-    """Convert a duration string to total seconds"""
-    duration_str = duration_str.strip()
+    """Convert a duration string to total seconds - Handles ALL formats"""
+    duration_str = duration_str.strip().lower()
     total_seconds = 0
     
-    # Pattern for "1h 18m 47s"
-    match = re.search(r'(\d+)\s*h(?:r|our)?s?\s*(\d+)\s*m(?:in|inute)?s?\s*(\d+)\s*s(?:ec|econd)?s?', duration_str, re.IGNORECASE)
+    # Remove any text in parentheses or after keywords like "on", "from", "another"
+    duration_str = re.sub(r'\s+(?:on|from|another|whatsapp|other|phone).*$', '', duration_str, flags=re.IGNORECASE)
+    
+    # Pattern for "1h 18m 47s" or "1h 0m 35s"
+    match = re.search(r'(\d+)\s*h(?:r)?s?\s*(\d+)\s*m(?:in)?s?\s*(\d+)\s*s(?:ec)?s?', duration_str, re.IGNORECASE)
     if match:
         h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
         return h * 3600 + m * 60 + s
     
-    # Pattern for "1h 18m"
-    match = re.search(r'(\d+)\s*h(?:r|our)?s?\s*(\d+)\s*m(?:in|inute)?s?', duration_str, re.IGNORECASE)
+    # Pattern for "1h 18m" or "1h 0m"
+    match = re.search(r'(\d+)\s*h(?:r)?s?\s*(\d+)\s*m(?:in)?s?', duration_str, re.IGNORECASE)
     if match:
         h, m = int(match.group(1)), int(match.group(2))
         return h * 3600 + m * 60
     
-    # Pattern for "1h"
-    match = re.search(r'(\d+)\s*h(?:r|our)?s?', duration_str, re.IGNORECASE)
+    # Pattern for "1 H 31 M" (space between number and unit, uppercase) - FIXED
+    match = re.search(r'(\d+)\s*[hH](?:r)?\s*(\d+)\s*[mM]', duration_str)
+    if match:
+        h, m = int(match.group(1)), int(match.group(2))
+        return h * 3600 + m * 60
+    
+    # Pattern for "1hr 25m 21s" - FIXED
+    match = re.search(r'(\d+)\s*hr\s*(\d+)\s*m\s*(\d+)\s*s', duration_str, re.IGNORECASE)
+    if match:
+        h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        return h * 3600 + m * 60 + s
+    
+    # Pattern for "1 hr 49 min" (no seconds) - FIXED
+    match = re.search(r'(\d+)\s*hr\s*(\d+)\s*min', duration_str, re.IGNORECASE)
+    if match:
+        h, m = int(match.group(1)), int(match.group(2))
+        return h * 3600 + m * 60
+    
+    # Pattern for "1h" (just hours)
+    match = re.search(r'(\d+)\s*h(?:r)?s?', duration_str, re.IGNORECASE)
     if match:
         return int(match.group(1)) * 3600
     
     # Pattern for "56m 49s" (minutes and seconds)
-    match = re.search(r'(\d+)\s*m(?:in|inute)?s?\s*(\d+)\s*s(?:ec|econd)?s?', duration_str, re.IGNORECASE)
+    match = re.search(r'(\d+)\s*m(?:in)?s?\s*(\d+)\s*s(?:ec)?s?', duration_str, re.IGNORECASE)
     if match:
         m, s = int(match.group(1)), int(match.group(2))
         return m * 60 + s
     
-    # Pattern for "53m 7s" (minutes and seconds with single digit seconds) - FIXED
+    # Pattern for "53m 7s" (minutes and seconds with single digit seconds)
     match = re.search(r'(\d+)\s*m\s*(\d+)\s*s', duration_str, re.IGNORECASE)
     if match:
         m, s = int(match.group(1)), int(match.group(2))
         return m * 60 + s
     
-    # Pattern for "39m 47s" (another variation) - FIXED
-    match = re.search(r'(\d+)m\s*(\d+)s', duration_str, re.IGNORECASE)
-    if match:
-        m, s = int(match.group(1)), int(match.group(2))
-        return m * 60 + s
-    
     # Pattern for "56m" (just minutes)
-    match = re.search(r'(\d+)\s*m(?:in|inute)?s?', duration_str, re.IGNORECASE)
+    match = re.search(r'(\d+)\s*m(?:in)?s?', duration_str, re.IGNORECASE)
     if match:
         return int(match.group(1)) * 60
     
     # Pattern for "47s" (just seconds)
-    match = re.search(r'(\d+)\s*s(?:ec|econd)?s?', duration_str, re.IGNORECASE)
+    match = re.search(r'(\d+)\s*s(?:ec)?s?', duration_str, re.IGNORECASE)
     if match:
         return int(match.group(1))
     
-    # Pattern for MM:SS format (e.g., "53:07")
+    # Pattern for MM:SS format
     match = re.search(r'(\d{2}):(\d{2})', duration_str)
     if match:
         m, s = int(match.group(1)), int(match.group(2))
@@ -186,27 +207,38 @@ def seconds_to_hms(seconds: int) -> str:
 
 
 # ─────────────────────────────────────────────
-# Enhanced Numeric Helpers (Handles math like 121+19)
+# Enhanced Numeric Helpers (Handles math like 121+19, 126+10, 163 + 4)
 # ─────────────────────────────────────────────
 
 def coerce_int(value) -> int:
-    """Extract and sum numbers, handling patterns like '121+19'"""
+    """Extract and sum numbers, handling patterns like '126+10', '163 + 4', '143 + 3'"""
     if isinstance(value, int):
         return value
     if isinstance(value, float):
         return int(value)
     
-    str_val = str(value)
+    str_val = str(value).strip()
     
-    # Check if there's addition (e.g., "121+19" or "121 + 19")
+    # Check if it's "Leave"
+    if str_val.lower() == 'leave':
+        return 0
+    
+    # Check if there's addition (e.g., "126+10", "163 + 4", "56+6")
     if '+' in str_val:
         parts = re.split(r'\s*\+\s*', str_val)
         total = 0
         for part in parts:
+            # Extract only digits from each part
             nums = re.findall(r'\d+', part)
             if nums:
                 total += int(nums[0])
         return total
+    
+    # Check if there's a range or dash (e.g., "121-19" - treat as single number)
+    if '-' in str_val:
+        nums = re.findall(r'\d+', str_val)
+        if nums:
+            return int(nums[0])
     
     # Normal number extraction
     nums = re.findall(r"\d+", str_val)
