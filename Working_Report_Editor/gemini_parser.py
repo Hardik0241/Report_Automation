@@ -2,6 +2,7 @@
 gemini_parser.py — Parse email body into structured data using Gemini.
 Handles math in numbers (121+19), multiple durations, extra text after values.
 Sender email map takes priority over body keywords for department detection.
+UPDATED: Fixed fallback duration extraction for HR department
 """
 
 import json
@@ -39,6 +40,7 @@ For an HR report, look for:
 - "interview held", "interviews held", "held"
 - "tomorrow interview lineups", "lineups"
 - "today held", "line ups for tomorrow"
+- "Today Held", "Today Interview Held"
 
 For SALES report:
 {
@@ -66,6 +68,7 @@ Rules:
 - Use "00:00:00" for missing duration.
 - If the email contains HR keywords (interview, held, lineup) → HR
 - If the email only contains call/dialer numbers → Sales
+- For HR duration, look for "Duration:" or "Duration is:" followed by format like "39m 47s" or "53m 7s"
 
 Email content:
 """
@@ -155,7 +158,8 @@ class GeminiParser:
             "hr", "recruitment", "interview", "hiring", "lineup", 
             "candidate", "screening", "interview held", "tomorrow interview",
             "today held", "line ups for tomorrow", "total line ups", 
-            "interview lineups", "held interviews", "held-"
+            "interview lineups", "held interviews", "held-",
+            "today held", "today interview held"
         ]
         for kw in hr_keywords:
             if kw in t:
@@ -184,16 +188,15 @@ class GeminiParser:
             for kw in keywords:
                 kw_esc = re.escape(kw)
                 patterns = [
-                    rf"(?i){kw_esc}\s*[:\-=]?\s*([\d\s\+]+)",           # Catches "121+19"
-                    rf"(?i){kw_esc}[:\-=]?\s*([\d\s\+]+)",              # Catches "121+19"
-                    rf"(?i){kw_esc}\s+([\d\s\+]+)",                     # Catches "121+19"
-                    rf"(?i){kw_esc}[\s]*[-:=][\s]*([\d\s\+]+)",         # Catches "121+19"
+                    rf"(?i){kw_esc}\s*[:\-=]?\s*([\d\s\+]+)",
+                    rf"(?i){kw_esc}[:\-=]?\s*([\d\s\+]+)",
+                    rf"(?i){kw_esc}\s+([\d\s\+]+)",
+                    rf"(?i){kw_esc}[\s]*[-:=][\s]*([\d\s\+]+)",
                 ]
                 for pattern in patterns:
                     match = re.search(pattern, text)
                     if match:
                         value_str = match.group(1)
-                        # Handle math in numbers (121+19)
                         if '+' in value_str:
                             parts = re.split(r'\s*\+\s*', value_str)
                             total = 0
@@ -230,8 +233,8 @@ class GeminiParser:
                 "employee_name": name,
                 "department": "HR",
                 "Total Calls": grab([
-                    "total calls", "total dial", "total dials", "total dialed", 
-                    "calls", "total connected", "connected calls", "dial"
+                    "total dialed", "total dial", "total calls", "dialed",
+                    "calls", "dial", "total connected", "connected calls"
                 ]),
                 "Connected Calls": grab([
                     "connected calls", "connected", "total connected", "conn", "connect"
@@ -241,12 +244,14 @@ class GeminiParser:
                     "tomorrow interview lineups", "interview lineups", 
                     "tomorrow lineups", "lineups", "total line ups for tomorrow",
                     "total line ups", "line ups for tomorrow", "lineups for tomorrow",
-                    "line ups", "lineups", "total lineups", "line up for tomorrow"
+                    "line ups", "lineups", "total lineups", "line up for tomorrow",
+                    "total line up for tomorrow", "tomorrow line up"
                 ]),
                 "Interview Held": grab([
                     "interview held", "interviews held", "held", "today held",
                     "today interview held", "interview done", "interviews done",
-                    "held interviews", "today held interviews", "held-"
+                    "held interviews", "today held interviews", "held-",
+                    "today held-", "today held interview"
                 ]),
             }
 
@@ -288,15 +293,27 @@ class GeminiParser:
 
     @staticmethod
     def _extract_duration_flexible(text: str) -> str:
-        """Extract duration, handling multiple durations added together (e.g., 1h 18m + 8m 47s)"""
+        """
+        Extract duration from text, handling multiple durations added together.
+        UPDATED: Better handling for HR duration formats like "39m 47s", "53m 7s"
+        """
         # First, find all duration patterns
         patterns = [
-            r'(\d+\s*h(?:r|our)?s?\s*\d*\s*m(?:in|inute)?s?\s*\d*\s*s(?:ec|econd)?s?)',  # Full pattern
-            r'(\d+\s*h(?:r|our)?s?\s*\d*\s*m(?:in|inute)?s?)',                          # Hours + minutes
-            r'(\d+\s*h(?:r|our)?s?)',                                                   # Just hours
-            r'(\d+\s*m(?:in|inute)?s?\s*\d*\s*s(?:ec|econd)?s?)',                       # Minutes + seconds
-            r'(\d+\s*m(?:in|inute)?s?)',                                                # Just minutes
-            r'(\d+\s*s(?:ec|econd)?s?)',                                                # Just seconds
+            # Pattern for "39m 47s" or "53m 7s" - MOST COMMON FOR HR
+            r'(\d+)\s*m\s*(\d+)\s*s',
+            r'(\d+)m\s*(\d+)s',
+            # Pattern for "1h 18m 47s" - Full pattern
+            r'(\d+\s*h(?:r|our)?s?\s*\d+\s*m(?:in|inute)?s?\s*\d+\s*s(?:ec|econd)?s?)',
+            # Pattern for "1h 18m" - Hours and minutes
+            r'(\d+\s*h(?:r|our)?s?\s*\d+\s*m(?:in|inute)?s?)',
+            # Pattern for "56m 49s" - Minutes and seconds
+            r'(\d+\s*m(?:in|inute)?s?\s*\d+\s*s(?:ec|econd)?s?)',
+            # Pattern for "1h" - Just hours
+            r'(\d+\s*h(?:r|our)?s?)',
+            # Pattern for "56m" - Just minutes
+            r'(\d+\s*m(?:in|inute)?s?)',
+            # Pattern for "47s" - Just seconds
+            r'(\d+\s*s(?:ec|econd)?s?)',
         ]
         
         all_durations = []
@@ -305,14 +322,46 @@ class GeminiParser:
             all_durations.extend(matches)
         
         if not all_durations:
+            # Try to find "Duration: 39m 47s" pattern
+            duration_match = re.search(r'Duration[:\s]+(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
+            if duration_match:
+                m, s = int(duration_match.group(1)), int(duration_match.group(2))
+                return f"00:{m:02d}:{s:02d}"
+            
+            # Try to find "Duration is 53m 7s" pattern
+            duration_match = re.search(r'Duration\s+is\s+(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
+            if duration_match:
+                m, s = int(duration_match.group(1)), int(duration_match.group(2))
+                return f"00:{m:02d}:{s:02d}"
+            
             return "00:00:00"
         
+        # For pattern that returns two capture groups (m, s)
+        if len(all_durations) > 0 and isinstance(all_durations[0], tuple) and len(all_durations[0]) == 2:
+            try:
+                m, s = int(all_durations[0][0]), int(all_durations[0][1])
+                return f"00:{m:02d}:{s:02d}"
+            except:
+                pass
+        
         # Sum all durations (handles "1h 18m + 8m 47s" cases)
-        from utils import parse_duration, duration_to_seconds, seconds_to_hms
+        from utils import duration_to_seconds, seconds_to_hms
         total_seconds = 0
         for dur_str in all_durations:
             # Clean up the duration string
-            dur_str = re.sub(r'\s+', ' ', dur_str.strip())
-            total_seconds += duration_to_seconds(dur_str)
+            if isinstance(dur_str, tuple):
+                # Handle tuple results from regex
+                if len(dur_str) == 2:
+                    try:
+                        m, s = int(dur_str[0]), int(dur_str[1])
+                        total_seconds += m * 60 + s
+                    except:
+                        pass
+            else:
+                dur_str = re.sub(r'\s+', ' ', dur_str.strip())
+                total_seconds += duration_to_seconds(dur_str)
         
-        return seconds_to_hms(total_seconds)
+        if total_seconds > 0:
+            return seconds_to_hms(total_seconds)
+        
+        return "00:00:00"
