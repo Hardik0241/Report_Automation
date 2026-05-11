@@ -13,3 +13,7 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-05-11 15:56:18,19e173c8bf1df9c0,Daily report,ruwaida.hredujam@gmail.com,Ruwaida,2026-05-11T13:31:30,FAILED,HR,Ruwaida,11-05-2026,"Missing required fields: Total Calls, Connected Calls",0.56
 2026-05-11 15:56:19,19e173c0fbcdee98,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-05-11T13:30:58,FAILED,HR,Salomi,11-05-2026,"Missing required fields: Total Calls, Connected Calls",0.50
 2026-05-11 15:56:19,19e173bd0e9c5c13,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-05-11T13:30:33,FAILED,HR,Mehvish,11-05-2026,"Missing required fields: Total Calls, Connected Calls",0.62
+2026-05-11 17:54:48,19e174e60e4844d2,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-05-11T13:50:57,SUCCESS,HR,Amanpreet,11-05-2026,,14.18
+2026-05-11 17:55:05,19e173c8bf1df9c0,Daily report,ruwaida.hredujam@gmail.com,Ruwaida,2026-05-11T13:31:30,SUCCESS,HR,Ruwaida,11-05-2026,,15.20
+2026-05-11 17:55:16,19e173c0fbcdee98,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-05-11T13:30:58,SUCCESS,HR,Salomi,11-05-2026,,11.40
+2026-05-11 17:55:35,19e173bd0e9c5c13,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-05-11T13:30:33,FAILED,HR,Mehvish,11-05-2026,"Missing required fields: Total Calls, Connected Calls",18.99
