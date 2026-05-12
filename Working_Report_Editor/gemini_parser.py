@@ -1,6 +1,7 @@
 """
 gemini_parser.py — Parse email body into structured data using Gemini.
 UPDATED: Enhanced fallback for Sales duration parsing and "Leave" detection
+UPDATED: Fixed duration extraction for proper hour/minute/second capture
 """
 
 import json
@@ -322,74 +323,39 @@ class GeminiParser:
 
     @staticmethod
     def _extract_duration_flexible(text: str) -> str:
-        """Extract duration from text, handling multiple durations added together."""
+        """Extract duration from text - FIXED for proper hour/minute/second capture"""
         # First, check for "Leave"
         if 'leave' in text.lower():
             return "00:00:00"
         
-        # Find all duration patterns
-        patterns = [
-            # Pattern for "1h 0m 35s" or "1h 0m 35s"
-            r'(\d+)\s*h(?:r)?s?\s*(\d+)\s*m(?:in)?s?\s*(\d+)\s*s(?:ec)?s?',
-            # Pattern for "1H 15M + 14M" (uppercase with +)
-            r'(\d+)\s*[hH](?:r)?\s*(\d+)\s*[mM]\s*\+\s*(\d+)\s*[mM]',
-            # Pattern for "1 H 31 M" (space between)
-            r'(\d+)\s*[hH]\s*(\d+)\s*[mM]',
-            # Pattern for "1hr 25m 21s"
-            r'(\d+)\s*hr\s*(\d+)\s*m\s*(\d+)\s*s',
-            # Pattern for "1 hr 49 min"
-            r'(\d+)\s*hr\s*(\d+)\s*min',
-            # Pattern for "1h 18m"
-            r'(\d+)\s*h(?:r)?s?\s*(\d+)\s*m(?:in)?s?',
-            # Pattern for "1h 17m 45s"
-            r'(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*s',
-            # Pattern for "56m 49s"
-            r'(\d+)\s*m(?:in)?s?\s*(\d+)\s*s(?:ec)?s?',
-            # Pattern for "53m 7s"
-            r'(\d+)\s*m\s*(\d+)\s*s',
-        ]
+        # Pattern for "1h 43m 32s" or "1hr 54m 14s"
+        match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
         
-        all_matches = []
-        for pattern in patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            all_matches.extend(matches)
+        # Pattern for "1h 43m" (hours and minutes only)
+        match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m', text, re.IGNORECASE)
+        if match:
+            h, m = int(match.group(1)), int(match.group(2))
+            return f"{h:02d}:{m:02d}:00"
         
-        if not all_matches:
-            # Try to find "Duration:" pattern
-            duration_match = re.search(r'Duration[:\s-]+\s*([^,\n]+)', text, re.IGNORECASE)
-            if duration_match:
-                dur_text = duration_match.group(1).strip()
-                return parse_duration(dur_text)
-            return "00:00:00"
+        # Pattern for "53m 7s" (minutes and seconds)
+        match = re.search(r'(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
+        if match:
+            m, s = int(match.group(1)), int(match.group(2))
+            return f"00:{m:02d}:{s:02d}"
         
-        total_seconds = 0
-        for match in all_matches:
-            if len(match) == 3:
-                # h, m, s format
-                try:
-                    h, m, s = int(match[0]), int(match[1]), int(match[2])
-                    total_seconds += h * 3600 + m * 60 + s
-                except:
-                    pass
-            elif len(match) == 2:
-                # m, s or h, m format
-                try:
-                    # Check if it looks like hours and minutes (small numbers suggest minutes/seconds)
-                    if int(match[0]) < 24 and int(match[1]) < 60 and 'h' in text.lower():
-                        # Likely hours and minutes
-                        h, m = int(match[0]), int(match[1])
-                        total_seconds += h * 3600 + m * 60
-                    else:
-                        # Likely minutes and seconds
-                        m, s = int(match[0]), int(match[1])
-                        total_seconds += m * 60 + s
-                except:
-                    pass
+        # Pattern for "56m" (just minutes)
+        match = re.search(r'(\d+)\s*m', text, re.IGNORECASE)
+        if match:
+            m = int(match.group(1))
+            return f"00:{m:02d}:00"
         
-        if total_seconds > 0:
-            h = total_seconds // 3600
-            m = (total_seconds % 3600) // 60
-            s = total_seconds % 60
+        # Pattern for "Duration: 1h 43m 32s"
+        match = re.search(r'Duration[:\s-]+\s*(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
         
         return "00:00:00"
