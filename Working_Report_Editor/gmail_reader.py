@@ -1,6 +1,7 @@
 """
 gmail_reader.py — Fetch unread emails from Gmail
 READ ONLY MODE - Emails stay UNREAD
+UPDATED: Mark emails as READ after successful processing
 """
 
 import base64
@@ -79,7 +80,7 @@ class GmailReader:
             return self._service
         creds = self._get_oauth_creds()
         self._service = build("gmail", "v1", credentials=creds)
-        logger.info("Gmail service initialised (READ ONLY)")
+        logger.info("Gmail service initialised")
         return self._service
 
     def _extract_email_address(self, from_header: str) -> str:
@@ -90,6 +91,21 @@ class GmailReader:
         if match:
             return match.group(0).strip().lower()
         return from_header.strip().lower()
+
+    def mark_as_read(self, email_id: str) -> bool:
+        """Mark an email as READ after successful processing"""
+        try:
+            svc = self._get_service()
+            svc.users().messages().modify(
+                userId=GMAIL_USER_ID,
+                id=email_id,
+                body={"removeLabelIds": ["UNREAD"]}
+            ).execute()
+            logger.info(f"📬 Marked email {email_id} as READ")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to mark email {email_id} as read: {e}")
+            return False
 
     @with_retry()
     def fetch_emails(self) -> List[Dict]:
@@ -138,7 +154,6 @@ class GmailReader:
                 body = "\n".join(body_parts)
 
                 received_ms = int(msg.get("internalDate", 0))
-                # UPDATED: Convert UTC timestamp to IST
                 received_at = received_timestamp_to_datetime(received_ms) if received_ms else datetime.now()
 
                 emails.append({
