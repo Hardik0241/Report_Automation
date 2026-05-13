@@ -1,7 +1,7 @@
 """
 tracker.py — Email processing tracker with proper logging and duplicate detection
 Prevents processing same email multiple times
-UPDATED: Enhanced duplicate detection with sheet check integration
+UPDATED: Enhanced duplicate detection to prevent multiple SUCCESS entries for same employee/date
 """
 
 import csv
@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set, Tuple
 
 from config import (
     DUPLICATE_CACHE_PATH,
@@ -44,6 +44,9 @@ class Tracker:
         
         self._init_csv()
         self._init_cache()
+        
+        # Track successful processed (employee, date) pairs to prevent duplicate SUCCESS logs
+        self._success_cache: Set[Tuple[str, str, str]] = set()  # (department, employee_name, date)
 
     def _init_csv(self):
         try:
@@ -103,12 +106,34 @@ class Tracker:
 
     def is_processed(self, email_hash: str) -> bool:
         return self.is_duplicate(email_hash)
+    
+    def has_success_for_employee(self, department: str, employee_name: str, date: str) -> bool:
+        """Check if there's already a SUCCESS log for this employee on this date"""
+        try:
+            with open(self.log_path, "r", encoding="utf-8") as fh:
+                reader = csv.DictReader(fh)
+                for row in reader:
+                    if (row.get("Status") == "SUCCESS" and 
+                        row.get("Department") == department and 
+                        row.get("Employee_Name") == employee_name and 
+                        row.get("Date") == date):
+                        return True
+        except Exception:
+            pass
+        return False
 
     def log_status(self, email_preview: str, status: str, email_id: str = "",
                    department: str = "", employee_name: str = "", date: str = "",
                    reason: str = "", processing_time: float = 0.0,
                    sender_email: str = "", sender_name: str = "",
                    received_time: Optional[datetime] = None) -> None:
+        
+        # IMPORTANT: Skip logging if this is a SUCCESS and we already have a SUCCESS for this employee/date
+        if status == "SUCCESS":
+            if self.has_success_for_employee(department, employee_name, date):
+                logger.info(f"⏭️ Skipping duplicate SUCCESS log for {employee_name} on {date} - already recorded")
+                return
+        
         received_iso = received_time.isoformat() if received_time else ""
         row = [
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -138,16 +163,25 @@ class Tracker:
                 rows = list(csv.DictReader(fh))
         except Exception:
             rows = []
+        
+        # Count unique successes (by employee + date)
+        unique_successes = set()
+        for r in rows:
+            if r.get("Status") == "SUCCESS":
+                key = (r.get("Department", ""), r.get("Employee_Name", ""), r.get("Date", ""))
+                unique_successes.add(key)
+        
         total = len(rows)
-        success = sum(1 for r in rows if r.get("Status") == "SUCCESS")
+        success = len(unique_successes)  # Count unique successes, not total log entries
         failed = sum(1 for r in rows if r.get("Status") == "FAILED")
         duplicate = sum(1 for r in rows if r.get("Status") == "DUPLICATE")
+        
         return {
             "total": total,
             "success": success,
             "failed": failed,
             "duplicate": duplicate,
-            "success_rate": round(success / total * 100, 1) if total else 0.0,
+            "success_rate": round(success / len(unique_successes) * 100, 1) if unique_successes else 0.0,
         }
 
     def get_failed_rows(self) -> List[Dict]:
