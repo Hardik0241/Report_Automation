@@ -2,6 +2,7 @@
 dashboard.py — Report Automation Dashboard
 Refresh Button clears logs file AND resets dashboard to zero
 With hover effects, glow animations, and button press effects
+UPDATED: Statistics now count unique employees per date (no duplicates)
 """
 
 import os
@@ -309,12 +310,18 @@ def load_logs():
 
 
 def get_stats(df: pd.DataFrame) -> dict:
+    """Get statistics with unique employee counts (no duplicates per day)"""
     if df.empty:
         return {"total": 0, "success": 0, "failed": 0, "rate": 0, "today_success": 0}
 
-    total = len(df)
-    success = len(df[df["Status"] == "SUCCESS"])
+    # Count unique successes (by employee + date) - prevents duplicates
+    success_df = df[df["Status"] == "SUCCESS"]
+    unique_successes = success_df[["Department", "Employee_Name", "Date"]].drop_duplicates()
+    success = len(unique_successes)
+    
     failed = len(df[df["Status"] == "FAILED"])
+    total = success + failed
+    
     rate = (success / total * 100) if total > 0 else 0
 
     return {"total": total, "success": success, "failed": failed, "rate": round(rate, 1), "today_success": success}
@@ -408,7 +415,10 @@ st.markdown("---")
 
 st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
 if "Department" in df.columns and "Status" in df.columns:
-    dept_data = df[df["Status"] == "SUCCESS"]["Department"].value_counts().reset_index()
+    success_df = df[df["Status"] == "SUCCESS"]
+    # Use unique successes for pie chart
+    unique_successes = success_df[["Department", "Employee_Name", "Date"]].drop_duplicates()
+    dept_data = unique_successes["Department"].value_counts().reset_index()
     if not dept_data.empty:
         dept_data.columns = ["Department", "Count"]
         fig = px.pie(dept_data, names="Department", values="Count", 
