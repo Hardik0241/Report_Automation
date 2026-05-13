@@ -1,7 +1,6 @@
 """
 gmail_reader.py — Fetch unread emails from Gmail
 READ ONLY MODE - Emails stay UNREAD
-UPDATED: Mark emails as READ after successful processing
 """
 
 import base64
@@ -38,7 +37,6 @@ class GmailReader:
 
         import os
 
-        # Try environment variables (GitHub Actions)
         refresh_token = os.environ.get("REFRESH_TOKEN", "")
         client_id = os.environ.get("CLIENT_ID", "")
         client_secret = os.environ.get("CLIENT_SECRET", "")
@@ -55,7 +53,6 @@ class GmailReader:
             logger.info("OAuth credentials loaded from environment")
             return self._oauth_creds
 
-        # Try Streamlit secrets
         try:
             import streamlit as st
             oauth = st.secrets.get("GOOGLE_OAUTH", {})
@@ -80,7 +77,7 @@ class GmailReader:
             return self._service
         creds = self._get_oauth_creds()
         self._service = build("gmail", "v1", credentials=creds)
-        logger.info("Gmail service initialised")
+        logger.info("Gmail service initialised (READ ONLY)")
         return self._service
 
     def _extract_email_address(self, from_header: str) -> str:
@@ -91,21 +88,6 @@ class GmailReader:
         if match:
             return match.group(0).strip().lower()
         return from_header.strip().lower()
-
-    def mark_as_read(self, email_id: str) -> bool:
-        """Mark an email as READ after successful processing"""
-        try:
-            svc = self._get_service()
-            svc.users().messages().modify(
-                userId=GMAIL_USER_ID,
-                id=email_id,
-                body={"removeLabelIds": ["UNREAD"]}
-            ).execute()
-            logger.info(f"📬 Marked email {email_id} as READ")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to mark email {email_id} as read: {e}")
-            return False
 
     @with_retry()
     def fetch_emails(self) -> List[Dict]:
@@ -135,7 +117,6 @@ class GmailReader:
                     userId=GMAIL_USER_ID, id=msg_stub["id"], format="full"
                 ).execute()
 
-                # Extract headers
                 subject = ""
                 from_email = ""
                 for h in msg["payload"].get("headers", []):
@@ -147,7 +128,6 @@ class GmailReader:
                 sender_email = self._extract_email_address(from_email)
                 print(f"DEBUG: Processing email from: {sender_email}", flush=True)
 
-                # Extract body and attachments
                 body_parts = []
                 att_paths = []
                 self._walk_parts(svc, msg_stub["id"], msg["payload"], body_parts, att_paths)
