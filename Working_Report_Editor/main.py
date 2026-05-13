@@ -7,6 +7,8 @@ UPDATED: Screenshot validation is optional, email is source of truth
 UPDATED: NO "Quota Error" status saved to sheet - it's a system issue
 UPDATED: Duplicate emails SKIP silently — no DUPLICATE log entry
 UPDATED: Report Status column now always gets "Email Only" as default
+UPDATED: Only process emails from today's date (ignores previous days)
+UPDATED: Mark emails as READ after successful processing
 """
 
 import logging
@@ -101,6 +103,16 @@ class ReportProcessor:
             logger.warning(f"Error checking sheet for {employee_name}: {e}")
             return False
 
+    def _is_today_date(self, date_str: str) -> bool:
+        """Check if the given date string is today's date"""
+        try:
+            email_date = datetime.strptime(date_str, "%d-%m-%Y").date()
+            today_date = datetime.now().date()
+            return email_date == today_date
+        except Exception as e:
+            logger.warning(f"Error comparing dates: {e}")
+            return False
+
     def process_email(self, email: Dict) -> Dict:
         t0 = time.time()
         email_id = email.get("id", "")
@@ -143,6 +155,8 @@ class ReportProcessor:
                 processing_time=time.time() - t0, sender_email=sender_email,
                 sender_name=emp, received_time=received_at,
             )
+            # Mark email as READ in Gmail after successful processing
+            self.gmail.mark_as_read(email_id)
             return {"status": "SUCCESS", "department": dept, "employee": emp, "date": date_str}
 
         try:
@@ -153,10 +167,21 @@ class ReportProcessor:
             date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
 
             # ─────────────────────────────────────────────
-            # 2. SHEET CHECK — if already written, SKIP SILENTLY
+            # 2. DATE VALIDATION - ONLY PROCESS TODAY'S EMAILS
+            # ─────────────────────────────────────────────
+            if not self._is_today_date(date_str):
+                logger.info(f"⏭️ Skipping email from {date_str} (not today's date) - will remain unread for next working day")
+                # Mark as processed in cache to avoid re-checking, but don't mark as READ
+                self.tracker.mark_processed(email_hash)
+                return {"status": "SKIPPED_OLD_DATE", "reason": f"Email date {date_str} is not today"}
+
+            # ─────────────────────────────────────────────
+            # 3. SHEET CHECK — if already written, SKIP SILENTLY
             # ─────────────────────────────────────────────
             if self._check_already_in_sheet(dept, canonical_name, date_str):
-                logger.info(f"✅ Employee {canonical_name} already has data in sheet for {date_str} → skipping")
+                logger.info(f"✅ Employee {canonical_name} already has data in sheet for {date_str} → marking as READ")
+                self.tracker.mark_processed(email_hash)
+                self.gmail.mark_as_read(email_id)
                 return {"status": "SKIPPED_SHEET"}
 
             email_data = self.parser.parse_email(body, sender_email)
@@ -226,7 +251,7 @@ class ReportProcessor:
                 email_data["report_status"] = "Email (screenshot mismatch)"
                 logger.info(f"📊 {canonical_name}: Email values written despite screenshot mismatch")
             else:
-                email_data["report_status"] = "Email Only"  # <-- This ensures status is not empty
+                email_data["report_status"] = "Email Only"
 
             self.sheets.ensure_date_for_all_employees(dept, date_str)
             self.sheets.ensure_status_column(dept, date_str)
@@ -274,7 +299,7 @@ class ReportProcessor:
 
         success = sum(1 for r in results if r.get("status") == "SUCCESS")
         failed = sum(1 for r in results if r.get("status") == "FAILED")
-        skipped = sum(1 for r in results if r.get("status") in ["SKIPPED_DUPLICATE", "SKIPPED_RUN", "SKIPPED_SHEET"])
+        skipped = sum(1 for r in results if r.get("status") in ["SKIPPED_DUPLICATE", "SKIPPED_RUN", "SKIPPED_SHEET", "SKIPPED_OLD_DATE"])
 
         logger.info(f"Run complete → SUCCESS={success}  FAILED={failed}  SKIPPED={skipped}")
         logger.info("=" * 60)
