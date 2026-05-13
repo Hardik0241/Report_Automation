@@ -1,1 +1,3 @@
 Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,Department,Employee_Name,Date,Reason,Processing_Time_Sec
+2026-05-13 12:13:18,19e213b8675bb8aa,Report,komals.edujam@gmail.com,Komal,2026-05-13T12:06:34,SUCCESS,Sales,Komal,13-05-2026,,14.72
+2026-05-13 12:13:32,19e2136707e2de05,Reports Early Departure,apoorva.edujam@gmail.com,Apoorva,2026-05-13T12:01:00,SUCCESS,Sales,Apoorva,13-05-2026,,14.09
