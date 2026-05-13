@@ -6,6 +6,7 @@ NOW WITH: Sheet check before processing to prevent duplicate writes
 UPDATED: Screenshot validation is optional, email is source of truth
 UPDATED: NO "Quota Error" status saved to sheet - it's a system issue
 UPDATED: Duplicate emails SKIP silently — no DUPLICATE log entry
+UPDATED: Report Status column now always gets "Email Only" as default
 """
 
 import logging
@@ -218,13 +219,14 @@ class ReportProcessor:
                 else:
                     logger.info(f"📸 No screenshot found for {canonical_name} - skipping validation")
 
+            # Add status to email_data
             if report_status:
                 email_data["report_status"] = report_status
             elif screenshot_mismatch:
                 email_data["report_status"] = "Email (screenshot mismatch)"
                 logger.info(f"📊 {canonical_name}: Email values written despite screenshot mismatch")
             else:
-                email_data["report_status"] = ""
+                email_data["report_status"] = "Email Only"  # <-- This ensures status is not empty
 
             self.sheets.ensure_date_for_all_employees(dept, date_str)
             self.sheets.ensure_status_column(dept, date_str)
