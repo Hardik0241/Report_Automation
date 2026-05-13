@@ -8,7 +8,7 @@ UPDATED: NO "Quota Error" status saved to sheet - it's a system issue
 UPDATED: Duplicate emails SKIP silently — no DUPLICATE log entry
 UPDATED: Report Status column now always gets "Email Only" as default
 UPDATED: Only process emails from today's date (ignores previous days)
-UPDATED: Mark emails as READ after successful processing
+UPDATED: Emails REMAIN UNREAD in Gmail (no mark_as_read)
 """
 
 import logging
@@ -76,11 +76,9 @@ class ReportProcessor:
             if not row_num:
                 return False
             
-            # Get the row data to check if any data exists
             ws = self.sheets._get_worksheet(department, date_str)
             row_data = ws.row_values(row_num)
             
-            # Check if any numeric column (beyond Date and Employee Name) has data
             mapping = self.sheets.get_column_mapping(department)
             for field, col in mapping.items():
                 if field not in ("Date", "Employee Name", "Report Status"):
@@ -90,7 +88,6 @@ class ReportProcessor:
                             logger.info(f"Employee {employee_name} already has data in sheet for {date_str}: {field}={val}")
                             return True
             
-            # Also check Report Status column
             headers = ws.row_values(1)
             for i, header in enumerate(headers, start=1):
                 if header == "Report Status":
@@ -129,7 +126,6 @@ class ReportProcessor:
         # 1. DUPLICATE CHECK - PREVENT REPROCESSING SAME EMAIL
         # ─────────────────────────────────────────────
         if self.tracker.is_duplicate(email_hash):
-            # ✅ SKIP silently — no log, no write
             logger.info(f"🚫 Skipping duplicate email (already processed globally): {subject}")
             return {"status": "SKIPPED_DUPLICATE"}
 
@@ -155,8 +151,7 @@ class ReportProcessor:
                 processing_time=time.time() - t0, sender_email=sender_email,
                 sender_name=emp, received_time=received_at,
             )
-            # Mark email as READ in Gmail after successful processing
-            self.gmail.mark_as_read(email_id)
+            # Emails remain UNREAD - no mark_as_read() call
             return {"status": "SUCCESS", "department": dept, "employee": emp, "date": date_str}
 
         try:
@@ -170,8 +165,7 @@ class ReportProcessor:
             # 2. DATE VALIDATION - ONLY PROCESS TODAY'S EMAILS
             # ─────────────────────────────────────────────
             if not self._is_today_date(date_str):
-                logger.info(f"⏭️ Skipping email from {date_str} (not today's date) - will remain unread for next working day")
-                # Mark as processed in cache to avoid re-checking, but don't mark as READ
+                logger.info(f"⏭️ Skipping email from {date_str} (not today's date) - will remain unread")
                 self.tracker.mark_processed(email_hash)
                 return {"status": "SKIPPED_OLD_DATE", "reason": f"Email date {date_str} is not today"}
 
@@ -179,9 +173,8 @@ class ReportProcessor:
             # 3. SHEET CHECK — if already written, SKIP SILENTLY
             # ─────────────────────────────────────────────
             if self._check_already_in_sheet(dept, canonical_name, date_str):
-                logger.info(f"✅ Employee {canonical_name} already has data in sheet for {date_str} → marking as READ")
+                logger.info(f"✅ Employee {canonical_name} already has data in sheet for {date_str} → skipping")
                 self.tracker.mark_processed(email_hash)
-                self.gmail.mark_as_read(email_id)
                 return {"status": "SKIPPED_SHEET"}
 
             email_data = self.parser.parse_email(body, sender_email)
@@ -244,7 +237,6 @@ class ReportProcessor:
                 else:
                     logger.info(f"📸 No screenshot found for {canonical_name} - skipping validation")
 
-            # Add status to email_data
             if report_status:
                 email_data["report_status"] = report_status
             elif screenshot_mismatch:
