@@ -26,3 +26,4 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-05-13 18:01:45,19e2188d652ebdb7,KRA,siddhesh.edujam@gmail.com,Siddhesh,2026-05-13T13:31:03,SUCCESS,Sales,Siddhesh,13-05-2026,,1.49
 2026-05-13 20:06:39,19e218c70f921780,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-05-13T13:34:59,FAILED,HR,Salomi,13-05-2026,"Missing required fields: Total Calls, Connected Calls",10.59
 2026-05-13 20:06:52,19e218c669ca93b0,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-05-13T13:34:55,SUCCESS,HR,Amanpreet,13-05-2026,,13.30
+2026-05-13 20:19:31,19e218c70f921780,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-05-13T13:34:59,FAILED,HR,Salomi,13-05-2026,"Missing required fields: Total Calls, Connected Calls",2.13
