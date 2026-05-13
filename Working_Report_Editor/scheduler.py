@@ -1,14 +1,9 @@
 """
 scheduler.py — Automatic scheduler for the Report Automation System.
 
-Runs the email processor every 20 minutes between 2:30 PM and 11:59 PM.
-At midnight (00:00), marks all Sales employees who haven't submitted as "Not Sent".
-
-Deploy this file on GitHub Actions or any server — it runs forever.
-On your local PC: python scheduler.py
-On GitHub Actions: triggered by cron (see .github/workflows/scheduler.yml)
-
-UPDATED: Enhanced Not Sent marking to check actual data presence
+Runs the email processor every 20 minutes between 7:00 PM and 11:59 PM.
+ONLY runs on weekdays (Monday to Friday). Skips Saturday and Sunday.
+At midnight, marks all Sales employees who haven't submitted as "Not Sent".
 """
 
 import logging
@@ -32,6 +27,15 @@ logger = logging.getLogger(__name__)
 _marked_not_sent_dates: set = set()
 
 
+def is_weekday() -> bool:
+    """
+    Returns True if today is Monday-Friday (0=Monday, 4=Friday, 5=Saturday, 6=Sunday)
+    """
+    today = datetime.now().weekday()
+    # Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4
+    return today < 5  # 0-4 are weekdays
+
+
 def is_active_window() -> bool:
     """
     Returns True if current time is within the active window:
@@ -42,8 +46,8 @@ def is_active_window() -> bool:
 
     after_start = (h > ACTIVE_START_HOUR) or \
                   (h == ACTIVE_START_HOUR and m >= ACTIVE_START_MINUTE)
-    before_end  = (h < ACTIVE_END_HOUR) or \
-                  (h == ACTIVE_END_HOUR and m <= ACTIVE_END_MINUTE)
+    before_end = (h < ACTIVE_END_HOUR) or \
+                 (h == ACTIVE_END_HOUR and m <= ACTIVE_END_MINUTE)
 
     return after_start and before_end
 
@@ -54,10 +58,10 @@ def run_processor():
     try:
         from main import ReportProcessor
         results = ReportProcessor().run()
-        ok  = sum(1 for r in results if r.get("status") == "SUCCESS")
+        ok = sum(1 for r in results if r.get("status") == "SUCCESS")
         bad = sum(1 for r in results if r.get("status") == "FAILED")
-        dup = sum(1 for r in results if r.get("status") == "DUPLICATE")
-        logger.info(f"✅ Done — {ok} success, {bad} failed, {dup} duplicate")
+        dup = sum(1 for r in results if r.get("status") in ["SKIPPED_DUPLICATE", "SKIPPED_RUN", "SKIPPED_SHEET", "SKIPPED_OLD_DATE"])
+        logger.info(f"✅ Done — {ok} success, {bad} failed, {dup} skipped")
     except Exception as exc:
         logger.error(f"Processor error: {exc}", exc_info=True)
 
@@ -93,7 +97,7 @@ def main():
     logger.info("Scheduler started — active window: "
                 f"{ACTIVE_START_HOUR:02d}:{ACTIVE_START_MINUTE:02d} – "
                 f"{ACTIVE_END_HOUR:02d}:{ACTIVE_END_MINUTE:02d}")
-    logger.info("Checks every 20 minutes during active window")
+    logger.info("Only runs on weekdays (Monday-Friday)")
     logger.info("═" * 55)
 
     CHECK_INTERVAL_SECONDS = 20 * 60   # 20 minutes
@@ -105,13 +109,15 @@ def main():
         if now.hour == 0 and now.minute == 0:
             mark_not_sent_deadline()
 
-        # Active window: run the processor
-        if is_active_window():
-            run_processor()
+        # Check if today is a weekday
+        if is_weekday():
+            # Active window: run the processor
+            if is_active_window():
+                run_processor()
+            else:
+                logger.info(f"Outside active window ({now.strftime('%H:%M')}) — sleeping …")
         else:
-            logger.info(
-                f"Outside active window ({now.strftime('%H:%M')}) — sleeping …"
-            )
+            logger.info(f"Weekend day ({now.strftime('%A')}) — no processing today")
 
         time.sleep(CHECK_INTERVAL_SECONDS)
 
