@@ -2,6 +2,7 @@
 gemini_parser.py — Parse email body into structured data using Gemini.
 UPDATED: Enhanced fallback for Sales duration parsing and "Leave" detection
 UPDATED: Fixed duration extraction for proper hour/minute/second capture
+UPDATED: Enhanced grab() function to handle "Total dial:- 135" format
 """
 
 import json
@@ -204,18 +205,26 @@ class GeminiParser:
         def grab(keywords: list) -> int:
             for kw in keywords:
                 kw_esc = re.escape(kw)
+                # FIXED: Patterns to handle "Total dial:- 135" format
                 patterns = [
-                    rf"(?i){kw_esc}\s*[:\-=]?\s*([\d\s\+]+)",
-                    rf"(?i){kw_esc}[:\-=]?\s*([\d\s\+]+)",
-                    rf"(?i){kw_esc}\s+([\d\s\+]+)",
-                    rf"(?i){kw_esc}[\s]*[-:=][\s]*([\d\s\+]+)",
-                    rf"(?i){kw_esc}\s*[:\-=]?\s*(\d+(?:\s*\+\s*\d+)*)",
+                    # Pattern for "Total dial:- 135"
+                    rf"(?i){kw_esc}[\s]*[:\-=][\s\-]*(\d+(?:\s*\+\s*\d+)*)",
+                    # Pattern for "Total dial: 135"
+                    rf"(?i){kw_esc}[\s]*:[\s]*(\d+(?:\s*\+\s*\d+)*)",
+                    # Pattern for "Total dial- 135"
+                    rf"(?i){kw_esc}[\s]*-[\s]*(\d+(?:\s*\+\s*\d+)*)",
+                    # Pattern for "Total dial 135"
+                    rf"(?i){kw_esc}\s+(\d+(?:\s*\+\s*\d+)*)",
+                    # Pattern for "Total dial:- 135" (dash and colon)
+                    rf"(?i){kw_esc}[\s]*[:-][\s]*(\d+(?:\s*\+\s*\d+)*)",
+                    # Pattern for "dial 135"
+                    rf"(?i){kw_esc}\s+(\d+(?:\s*\+\s*\d+)*)",
                 ]
                 for pattern in patterns:
                     match = re.search(pattern, text)
                     if match:
                         value_str = match.group(1)
-                        # Handle addition like "126+10", "163 + 4"
+                        # Handle addition like "126+10"
                         if '+' in value_str:
                             parts = re.split(r'\s*\+\s*', value_str)
                             total = 0
@@ -224,6 +233,7 @@ class GeminiParser:
                                 if nums:
                                     total += int(nums[0])
                             return total
+                        # Extract the number
                         nums = re.findall(r'\d+', value_str)
                         if nums:
                             return int(nums[0])
