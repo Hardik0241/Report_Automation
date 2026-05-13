@@ -23,31 +23,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Set of dates already marked "Not Sent" today — prevents double-marking
 _marked_not_sent_dates: set = set()
 
 
 def is_weekday() -> bool:
-    """
-    Returns True if today is Monday-Friday (0=Monday, 4=Friday, 5=Saturday, 6=Sunday)
-    """
+    """Returns True if today is Monday-Friday"""
     today = datetime.now().weekday()
-    # Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4
-    return today < 5  # 0-4 are weekdays
+    return today < 5
 
 
 def is_active_window() -> bool:
-    """
-    Returns True if current time is within the active window:
-    7:00 PM (19:00) to 11:59 PM (23:59).
-    """
+    """Returns True if current time is within the active window: 7:00 PM to 11:59 PM"""
     now = datetime.now()
     h, m = now.hour, now.minute
 
-    after_start = (h > ACTIVE_START_HOUR) or \
-                  (h == ACTIVE_START_HOUR and m >= ACTIVE_START_MINUTE)
-    before_end = (h < ACTIVE_END_HOUR) or \
-                 (h == ACTIVE_END_HOUR and m <= ACTIVE_END_MINUTE)
+    after_start = (h > ACTIVE_START_HOUR) or (h == ACTIVE_START_HOUR and m >= ACTIVE_START_MINUTE)
+    before_end = (h < ACTIVE_END_HOUR) or (h == ACTIVE_END_HOUR and m <= ACTIVE_END_MINUTE)
 
     return after_start and before_end
 
@@ -67,24 +58,17 @@ def run_processor():
 
 
 def mark_not_sent_deadline():
-    """
-    Called at midnight. Marks all Sales employees who haven't submitted
-    today as 'Not Sent'. Only runs once per date.
-    """
+    """Called at midnight. Marks all Sales employees who haven't submitted today as 'Not Sent'."""
     today = datetime.now().strftime("%d-%m-%Y")
     if today in _marked_not_sent_dates:
-        return   # Already done for today
+        return
 
     logger.info(f"🕛 Midnight — marking unsubmitted Sales employees as 'Not Sent' for {today}")
     try:
         from sheets_service import SheetsService
         sheets = SheetsService()
-        
-        # First ensure all employees have rows for today
         sheets.ensure_date_for_all_employees("Sales", today)
         sheets.ensure_status_column("Sales", today)
-        
-        # Then mark Not Sent
         sheets.mark_not_sent("Sales", today)
         _marked_not_sent_dates.add(today)
         logger.info("✅ 'Not Sent' marking complete")
@@ -100,18 +84,15 @@ def main():
     logger.info("Only runs on weekdays (Monday-Friday)")
     logger.info("═" * 55)
 
-    CHECK_INTERVAL_SECONDS = 20 * 60   # 20 minutes
+    CHECK_INTERVAL_SECONDS = 20 * 60
 
     while True:
         now = datetime.now()
 
-        # Midnight handler: mark Not Sent for Sales
         if now.hour == 0 and now.minute == 0:
             mark_not_sent_deadline()
 
-        # Check if today is a weekday
         if is_weekday():
-            # Active window: run the processor
             if is_active_window():
                 run_processor()
             else:
