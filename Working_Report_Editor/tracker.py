@@ -136,13 +136,15 @@ class Tracker:
                    sender_email: str = "", sender_name: str = "",
                    received_time: Optional[datetime] = None) -> None:
         
+        # Skip if SUCCESS already exists for this employee/date
         if self.has_success_for_employee(department, employee_name, date):
             logger.info(f"⏭️ Skipping {status} log for {employee_name} on {date} - SUCCESS already recorded")
             return
         
+        # Skip if this is a FAILED and we already have a FAILED for this employee/date
         if status == "FAILED":
             if self.has_failed_for_employee(department, employee_name, date):
-                logger.info(f"⏭️ Skipping duplicate FAILED log for {employee_name} on {date} - already logged today")
+                logger.info(f"⏭️ Skipping duplicate FAILED log for {employee_name} on {date} - already logged")
                 return
         
         received_iso = received_time.isoformat() if received_time else ""
