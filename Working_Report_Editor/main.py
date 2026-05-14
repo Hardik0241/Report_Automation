@@ -40,7 +40,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Used for tracking duplicates within the same run (temporary)
 PROCESSED_EMAILS = set()
 
 
@@ -70,7 +69,6 @@ class ReportProcessor:
         return (None, None)
 
     def _check_already_in_sheet(self, department: str, employee_name: str, date_str: str) -> bool:
-        """Check if employee already has data in sheet for this date"""
         try:
             row_num = self.sheets.find_employee_row(department, date_str, employee_name)
             if not row_num:
@@ -101,7 +99,6 @@ class ReportProcessor:
             return False
 
     def _is_today_date(self, date_str: str) -> bool:
-        """Check if the given date string is today's date"""
         try:
             email_date = datetime.strptime(date_str, "%d-%m-%Y").date()
             today_date = datetime.now().date()
@@ -122,9 +119,6 @@ class ReportProcessor:
         received_ms = email.get("received_ms", 0)
         preview = (subject or body)[:120]
 
-        # ─────────────────────────────────────────────
-        # 1. DUPLICATE CHECK - PREVENT REPROCESSING SAME EMAIL
-        # ─────────────────────────────────────────────
         if self.tracker.is_duplicate(email_hash):
             logger.info(f"🚫 Skipping duplicate email (already processed globally): {subject}")
             return {"status": "SKIPPED_DUPLICATE"}
@@ -151,7 +145,6 @@ class ReportProcessor:
                 processing_time=time.time() - t0, sender_email=sender_email,
                 sender_name=emp, received_time=received_at,
             )
-            # Emails remain UNREAD - no mark_as_read() call
             return {"status": "SUCCESS", "department": dept, "employee": emp, "date": date_str}
 
         try:
@@ -161,17 +154,11 @@ class ReportProcessor:
 
             date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
 
-            # ─────────────────────────────────────────────
-            # 2. DATE VALIDATION - ONLY PROCESS TODAY'S EMAILS
-            # ─────────────────────────────────────────────
             if not self._is_today_date(date_str):
                 logger.info(f"⏭️ Skipping email from {date_str} (not today's date) - will remain unread")
                 self.tracker.mark_processed(email_hash)
                 return {"status": "SKIPPED_OLD_DATE", "reason": f"Email date {date_str} is not today"}
 
-            # ─────────────────────────────────────────────
-            # 3. SHEET CHECK — if already written, SKIP SILENTLY
-            # ─────────────────────────────────────────────
             if self._check_already_in_sheet(dept, canonical_name, date_str):
                 logger.info(f"✅ Employee {canonical_name} already has data in sheet for {date_str} → skipping")
                 self.tracker.mark_processed(email_hash)
