@@ -3,7 +3,8 @@ sheets_service.py — Google Sheets operations with Calibri font, size 13, cente
 Handles: Not Sent, Invalid Report, Quota Error, actual data
 Formatting: Dark black text (#000000), All borders on data cells
 UPDATED: Added mark_all_as_not_sent() for start-of-day marking
-UPDATED: Added caching to reduce API calls and prevent rate limiting
+UPDATED: Added caching to reduce API calls and prevent rate limiting (429 errors)
+UPDATED: Cache TTL of 60 seconds to stay within Google Sheets API limits
 """
 
 import logging
@@ -60,9 +61,10 @@ class SheetsService:
         logger.info("Connected to Sales and HR spreadsheets")
         self._emp_cache: Dict[Tuple[str, str], Dict[str, int]] = {}
         self._ws_cache: Dict[Tuple[str, str], gspread.Worksheet] = {}
+        # Caching to prevent 429 rate limit errors
         self._worksheet_data_cache: Dict[Tuple[str, str], List[List[str]]] = {}
         self._cache_timestamp: Dict[Tuple[str, str], datetime] = {}
-        self._cache_ttl_seconds = 60
+        self._cache_ttl_seconds = 60  # Cache expires after 60 seconds
         self._date_marked_not_sent: set = set()
 
     def _spreadsheet(self, department: str):
@@ -76,18 +78,32 @@ class SheetsService:
         return SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
 
     def _get_cached_worksheet_data(self, department: str, date_str: str) -> List[List[str]]:
+        """Get worksheet data from cache to reduce API calls and prevent 429 errors"""
         key = (department, date_str)
         now = datetime.now()
         
+        # Return cached data if still valid
         if key in self._worksheet_data_cache and key in self._cache_timestamp:
             if (now - self._cache_timestamp[key]).seconds < self._cache_ttl_seconds:
+                logger.debug(f"Using cached data for {department}/{date_str}")
                 return self._worksheet_data_cache[key]
         
+        # Cache miss, fetch fresh data
+        logger.debug(f"Cache miss for {department}/{date_str}, fetching from API")
         ws = self._get_worksheet(department, date_str)
         data = ws.get_all_values()
         self._worksheet_data_cache[key] = data
         self._cache_timestamp[key] = now
         return data
+    
+    def _invalidate_cache(self, department: str, date_str: str) -> None:
+        """Invalidate cache for a specific sheet after modifications"""
+        key = (department, date_str)
+        if key in self._worksheet_data_cache:
+            del self._worksheet_data_cache[key]
+            logger.debug(f"Cache invalidated for {department}/{date_str}")
+        if key in self._cache_timestamp:
+            del self._cache_timestamp[key]
 
     def _apply_formatting(self, ws: gspread.Worksheet, range_str: str = None) -> None:
         try:
@@ -152,7 +168,7 @@ class SheetsService:
             }]
             
             ws.spreadsheet.batch_update({"requests": requests})
-            logger.info(f"Applied formatting (Calibri 13, black text, borders) to {ws.title}")
+            logger.info(f"Applied formatting to {ws.title}")
             
         except Exception as e:
             logger.warning(f"Formatting failed: {e}")
@@ -237,6 +253,7 @@ class SheetsService:
                 ws.update(update["range"], update["values"], value_input_option="USER_ENTERED")
                 self._apply_formatting(ws, update["range"])
             self._date_marked_not_sent.add(date_key)
+            self._invalidate_cache(department, date_str)
             logger.info(f"Marked {len(updates)} employees as 'Not Sent' for {date_str}")
 
     @with_retry()
@@ -244,6 +261,7 @@ class SheetsService:
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
         ws = self._get_worksheet(department, date_str)
         
+        # Use cached data to avoid API calls
         all_values = self._get_cached_worksheet_data(department, date_str)
         
         has_date = set()
@@ -261,14 +279,12 @@ class SheetsService:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
             for update in updates:
                 self._apply_formatting(ws, update["range"])
-            key = (department, date_str)
-            if key in self._worksheet_data_cache:
-                del self._worksheet_data_cache[key]
+            self._invalidate_cache(department, date_str)
             logger.info(f"Added date for {len(updates)} employees in {department}")
 
     @with_retry()
     def find_employee_row(self, department: str, date_str: str, employee_name: str) -> Optional[int]:
-        ws = self._get_worksheet(department, date_str)
+        # Use cached data to avoid API calls
         all_values = self._get_cached_worksheet_data(department, date_str)
         for i, row in enumerate(all_values[1:], start=2):
             if row and row[0].strip() == date_str and row[1].strip().lower() == employee_name.lower():
@@ -282,7 +298,6 @@ class SheetsService:
         ws = self._get_worksheet(department, date_str)
         mapping = SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
         
-        # Find status column index
         headers = ws.row_values(1)
         status_col = None
         for i, header in enumerate(headers, start=1):
@@ -303,11 +318,9 @@ class SheetsService:
                 val = data.get(field, 0 if field != "Duration" else "00:00:00")
                 cell_updates[col] = val
             
-            # Also update status column if we have a status
             if status_col and data.get("report_status"):
                 cell_updates[status_col] = data.get("report_status")
             elif status_col:
-                # Clear "Not Sent" when data is written
                 cell_updates[status_col] = ""
             
             if not cell_updates:
@@ -326,14 +339,11 @@ class SheetsService:
             ws.batch_update(batch_requests, value_input_option="USER_ENTERED")
             for range_str in ranges_to_format:
                 self._apply_formatting(ws, range_str)
-            key = (department, date_str)
-            if key in self._worksheet_data_cache:
-                del self._worksheet_data_cache[key]
+            self._invalidate_cache(department, date_str)
             logger.info(f"Batch wrote {len(batch_requests)} rows to {ws.title}")
 
     @with_retry()
     def mark_not_sent(self, department: str, date_str: str) -> None:
-        """Legacy method - kept for compatibility. Use mark_all_as_not_sent instead."""
         if department != "Sales":
             return
         self.mark_all_as_not_sent(department, date_str)
@@ -375,9 +385,7 @@ class SheetsService:
         range_str = f"{col_letter}{row_num}"
         ws.update(range_str, [["Invalid"]], value_input_option="USER_ENTERED")
         self._apply_formatting(ws, range_str)
-        key = (department, date_str)
-        if key in self._worksheet_data_cache:
-            del self._worksheet_data_cache[key]
+        self._invalidate_cache(department, date_str)
         logger.info(f"Marked {employee_name} as 'Invalid' for {date_str}")
 
     @with_retry()
@@ -417,16 +425,13 @@ class SheetsService:
         range_str = f"{col_letter}{row_num}"
         ws.update(range_str, [["Quota Error"]], value_input_option="USER_ENTERED")
         self._apply_formatting(ws, range_str)
-        key = (department, date_str)
-        if key in self._worksheet_data_cache:
-            del self._worksheet_data_cache[key]
+        self._invalidate_cache(department, date_str)
         logger.info(f"Marked {employee_name} as 'Quota Error' for {date_str}")
 
     def list_sheets(self, department: str) -> List[str]:
         return [ws.title for ws in self._spreadsheet(department).worksheets()]
 
     def get_employees_for_date(self, department: str, date_str: str) -> Dict[str, int]:
-        ws = self._get_worksheet(department, date_str)
         all_values = self._get_cached_worksheet_data(department, date_str)
         emp_rows = {}
         for i, row in enumerate(all_values[1:], start=2):
