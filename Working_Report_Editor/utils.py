@@ -1,6 +1,6 @@
 """
 utils.py — Shared utility functions: date extraction, duration parsing, math handling
-COMPLETELY REWRITTEN: Fixed duration parsing and number extraction
+COMPLETELY REWRITTEN: Fixed duration parsing for addition patterns like "+7 minutes"
 """
 
 import re
@@ -66,7 +66,7 @@ def validate_date_string(date_str: str) -> Tuple[bool, Optional[str], str]:
 
 
 # ─────────────────────────────────────────────
-# DURATION PARSING - COMPLETELY REWRITTEN
+# DURATION PARSING - HANDLES ADDITION PATTERNS
 # ─────────────────────────────────────────────
 
 def parse_duration(raw: str) -> str:
@@ -74,46 +74,61 @@ def parse_duration(raw: str) -> str:
     Parse duration string to HH:MM:SS format.
     
     Handles:
-    - "1h 38m 40s" → 01:38:40
-    - "1 H 45 M" → 01:45:00
-    - "1h 51m" → 01:51:00
-    - "1h" → 01:00:00
-    - "43m 32s" → 00:43:32
+    - "2h 23m 14s +7 minutes" → 02:30:14
+    - "1h 9m 0s + (personal calls aprox 30mins)" → 01:39:00
+    - "1h 34m" → 01:34:00
+    - "1hr 48m 0s" → 01:48:00
+    - "46m 48s" → 00:46:48
     """
     if not raw:
         return "00:00:00"
     
     raw = str(raw).strip().lower()
     
-    # Check for "Leave"
     if 'leave' in raw:
         return "00:00:00"
     
-    # Handle multiple durations with "+"
-    if '+' in raw:
-        parts = raw.split('+')
-        total_seconds = 0
-        for part in parts:
-            total_seconds += _parse_single_duration_to_seconds(part.strip())
-        return _seconds_to_hms(total_seconds)
+    # First, extract all additional time from patterns like "+7 minutes"
+    total_seconds = 0
+    remaining_text = raw
     
-    # Single duration
-    seconds = _parse_single_duration_to_seconds(raw)
-    return _seconds_to_hms(seconds)
+    # Pattern 1: "+7 minutes" or "+ 30mins" or "+ 15 min"
+    match = re.search(r'\+\s*(\d+)\s*(?:min(?:ute)?s?)', remaining_text, re.IGNORECASE)
+    if match:
+        extra_minutes = int(match.group(1))
+        total_seconds += extra_minutes * 60
+        remaining_text = re.sub(r'\+\s*\d+\s*(?:min(?:ute)?s?)', '', remaining_text, flags=re.IGNORECASE)
+    
+    # Pattern 2: "+ (personal calls aprox 30mins)" - extract number before mins
+    match = re.search(r'\+\s*\([^)]*(\d+)\s*(?:min(?:ute)?s?)[^)]*\)', remaining_text, re.IGNORECASE)
+    if match:
+        extra_minutes = int(match.group(1))
+        total_seconds += extra_minutes * 60
+        remaining_text = re.sub(r'\+\s*\([^)]*\)', '', remaining_text, flags=re.IGNORECASE)
+    
+    # Pattern 3: "+10m" or "+ 10m"
+    match = re.search(r'\+\s*(\d+)\s*m', remaining_text, re.IGNORECASE)
+    if match:
+        extra_minutes = int(match.group(1))
+        total_seconds += extra_minutes * 60
+        remaining_text = re.sub(r'\+\s*\d+\s*m', '', remaining_text, flags=re.IGNORECASE)
+    
+    # Parse the main duration from remaining text
+    main_seconds = _parse_single_duration_to_seconds(remaining_text)
+    total_seconds += main_seconds
+    
+    return _seconds_to_hms(total_seconds)
 
 
 def _parse_single_duration_to_seconds(duration_str: str) -> int:
     """Parse a single duration string to total seconds."""
     duration_str = duration_str.strip().lower()
     
-    # Remove noise after keywords
-    duration_str = re.sub(r'\s+(?:on|from|another|whatsapp|other|phone).*$', '', duration_str)
-    
     hours = 0
     minutes = 0
     seconds = 0
     
-    # Pattern 1: "1h 38m 40s" or "1hr 54m 14s"
+    # Pattern 1: "2h 23m 14s"
     match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*s', duration_str)
     if match:
         hours = int(match.group(1))
@@ -121,26 +136,27 @@ def _parse_single_duration_to_seconds(duration_str: str) -> int:
         seconds = int(match.group(3))
         return hours * 3600 + minutes * 60 + seconds
     
-    # Pattern 2: "1 H 45 M" (uppercase with spaces)
-    match = re.search(r'(\d+)\s*[hH]\s*(\d+)\s*[mM]', duration_str)
-    if match:
-        hours = int(match.group(1))
-        minutes = int(match.group(2))
-        return hours * 3600 + minutes * 60
-    
-    # Pattern 3: "1h 51m" (hours and minutes)
+    # Pattern 2: "1h 34m" (no seconds)
     match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m', duration_str)
     if match:
         hours = int(match.group(1))
         minutes = int(match.group(2))
         return hours * 3600 + minutes * 60
     
-    # Pattern 4: "43m 32s" (minutes and seconds)
-    match = re.search(r'(\d+)\s*m\s*(\d+)\s*s', duration_str)
+    # Pattern 3: "1 H 34 M" (uppercase with spaces)
+    match = re.search(r'(\d+)\s*[hH]\s*(\d+)\s*[mM]', duration_str)
     if match:
-        minutes = int(match.group(1))
-        seconds = int(match.group(2))
-        return minutes * 60 + seconds
+        hours = int(match.group(1))
+        minutes = int(match.group(2))
+        return hours * 3600 + minutes * 60
+    
+    # Pattern 4: "1hr 48m 0s"
+    match = re.search(r'(\d+)\s*hr\s*(\d+)\s*m\s*(\d+)\s*s', duration_str)
+    if match:
+        hours = int(match.group(1))
+        minutes = int(match.group(2))
+        seconds = int(match.group(3))
+        return hours * 3600 + minutes * 60 + seconds
     
     # Pattern 5: "1h" (hours only)
     match = re.search(r'(\d+)\s*h(?:r)?', duration_str)
@@ -148,19 +164,26 @@ def _parse_single_duration_to_seconds(duration_str: str) -> int:
         hours = int(match.group(1))
         return hours * 3600
     
-    # Pattern 6: "43m" (minutes only)
+    # Pattern 6: "46m 48s" (minutes and seconds)
+    match = re.search(r'(\d+)\s*m\s*(\d+)\s*s', duration_str)
+    if match:
+        minutes = int(match.group(1))
+        seconds = int(match.group(2))
+        return minutes * 60 + seconds
+    
+    # Pattern 7: "46m" (minutes only)
     match = re.search(r'(\d+)\s*m', duration_str)
     if match:
         minutes = int(match.group(1))
         return minutes * 60
     
-    # Pattern 7: "32s" (seconds only)
+    # Pattern 8: "48s" (seconds only)
     match = re.search(r'(\d+)\s*s', duration_str)
     if match:
         seconds = int(match.group(1))
         return seconds
     
-    # Pattern 8: HH:MM:SS format
+    # Pattern 9: HH:MM:SS format
     match = re.search(r'(\d{2}):(\d{2}):(\d{2})', duration_str)
     if match:
         hours = int(match.group(1))
@@ -168,7 +191,7 @@ def _parse_single_duration_to_seconds(duration_str: str) -> int:
         seconds = int(match.group(3))
         return hours * 3600 + minutes * 60 + seconds
     
-    # Pattern 9: MM:SS format
+    # Pattern 10: MM:SS format
     match = re.search(r'(\d{2}):(\d{2})', duration_str)
     if match:
         minutes = int(match.group(1))
@@ -197,18 +220,11 @@ def seconds_to_hms(seconds: int) -> str:
 
 
 # ─────────────────────────────────────────────
-# Numeric Helpers - FIXED for "Total dial:- 135" format
+# Numeric Helpers
 # ─────────────────────────────────────────────
 
 def coerce_int(value) -> int:
-    """
-    Extract and sum numbers, handling patterns like:
-    - "135" → 135
-    - "126+10" → 136
-    - "Total dial:- 135" → 135 (extracts the number)
-    - "192" → 192
-    - "0" → 0
-    """
+    """Extract and sum numbers, handling patterns like '126+10', '63 + 10'"""
     if isinstance(value, int):
         return value
     if isinstance(value, float):
@@ -216,11 +232,10 @@ def coerce_int(value) -> int:
     
     str_val = str(value).strip()
     
-    # Check for "Leave"
     if str_val.lower() == 'leave':
         return 0
     
-    # Handle addition like "126+10"
+    # Handle addition like "63 + 10"
     if '+' in str_val:
         parts = re.split(r'\s*\+\s*', str_val)
         total = 0
@@ -230,12 +245,8 @@ def coerce_int(value) -> int:
                 total += int(nums[0])
         return total
     
-    # Extract first number found (handles "Total dial:- 135" → extracts 135)
-    nums = re.findall(r'\d+', str_val)
-    if nums:
-        return int(nums[0])
-    
-    return 0
+    nums = re.findall(r"\d+", str_val)
+    return int(nums[0]) if nums else 0
 
 
 def safe_title(name: str) -> str:
