@@ -2,8 +2,8 @@
 sheets_service.py — Google Sheets operations with Calibri font, size 13, center alignment
 Handles: Not Sent, Invalid Report, Quota Error, actual data
 Formatting: Dark black text (#000000), All borders on data cells
-ADDED: get_column_mapping method for checking existing data
-ADDED: Caching to reduce API calls and prevent rate limiting
+UPDATED: Added mark_all_as_not_sent() for start-of-day marking
+UPDATED: Added caching to reduce API calls and prevent rate limiting
 """
 
 import logging
@@ -63,6 +63,7 @@ class SheetsService:
         self._worksheet_data_cache: Dict[Tuple[str, str], List[List[str]]] = {}
         self._cache_timestamp: Dict[Tuple[str, str], datetime] = {}
         self._cache_ttl_seconds = 60
+        self._date_marked_not_sent: set = set()
 
     def _spreadsheet(self, department: str):
         return self._sales_ss if department == "Sales" else self._hr_ss
@@ -196,6 +197,48 @@ class SheetsService:
         logger.info(f"Created sheet '{name}' for {department}")
         return ws
 
+    def mark_all_as_not_sent(self, department: str, date_str: str) -> None:
+        """Mark ALL employees as 'Not Sent' in the Report Status column at start of day"""
+        if department != "Sales":
+            return
+        
+        date_key = f"{department}_{date_str}"
+        if date_key in self._date_marked_not_sent:
+            return
+        
+        ws = self._get_worksheet(department, date_str)
+        employees = SALES_EMPLOYEES
+        
+        self.ensure_status_column(department, date_str)
+        
+        headers = ws.row_values(1)
+        status_col = None
+        for i, header in enumerate(headers, start=1):
+            if header == "Report Status":
+                status_col = i
+                break
+        
+        if status_col is None:
+            status_col = len(headers) + 1
+            ws.update_cell(1, status_col, "Report Status")
+        
+        all_values = self._get_cached_worksheet_data(department, date_str)
+        
+        updates = []
+        for i, row in enumerate(all_values[1:], start=2):
+            row_date = row[0].strip() if len(row) > 0 else ""
+            if row_date == date_str:
+                col_letter = gspread.utils.rowcol_to_a1(i, status_col).rstrip("0123456789")
+                range_str = f"{col_letter}{i}"
+                updates.append({"range": range_str, "values": [["Not Sent"]]})
+        
+        if updates:
+            for update in updates:
+                ws.update(update["range"], update["values"], value_input_option="USER_ENTERED")
+                self._apply_formatting(ws, update["range"])
+            self._date_marked_not_sent.add(date_key)
+            logger.info(f"Marked {len(updates)} employees as 'Not Sent' for {date_str}")
+
     @with_retry()
     def ensure_date_for_all_employees(self, department: str, date_str: str) -> None:
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
@@ -238,6 +281,15 @@ class SheetsService:
             return
         ws = self._get_worksheet(department, date_str)
         mapping = SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
+        
+        # Find status column index
+        headers = ws.row_values(1)
+        status_col = None
+        for i, header in enumerate(headers, start=1):
+            if header == "Report Status":
+                status_col = i
+                break
+        
         batch_requests = []
         ranges_to_format = []
         
@@ -250,8 +302,17 @@ class SheetsService:
                     continue
                 val = data.get(field, 0 if field != "Duration" else "00:00:00")
                 cell_updates[col] = val
+            
+            # Also update status column if we have a status
+            if status_col and data.get("report_status"):
+                cell_updates[status_col] = data.get("report_status")
+            elif status_col:
+                # Clear "Not Sent" when data is written
+                cell_updates[status_col] = ""
+            
             if not cell_updates:
                 continue
+            
             cols = sorted(cell_updates)
             min_col, max_col = cols[0], cols[-1]
             row_values = [cell_updates.get(c, "") for c in range(min_col, max_col + 1)]
@@ -272,50 +333,10 @@ class SheetsService:
 
     @with_retry()
     def mark_not_sent(self, department: str, date_str: str) -> None:
+        """Legacy method - kept for compatibility. Use mark_all_as_not_sent instead."""
         if department != "Sales":
             return
-
-        ws = self._get_worksheet(department, date_str)
-        employees = SALES_EMPLOYEES
-        mapping = SALES_COLUMN_MAPPING
-
-        first_data_col = min(col for field, col in mapping.items() if field not in ("Date", "Employee Name"))
-        all_values = self._get_cached_worksheet_data(department, date_str)
-        updates = []
-
-        for emp in employees:
-            row_num = None
-            for i, row in enumerate(all_values[1:], start=2):
-                if row and row[0].strip() == date_str and row[1].strip().lower() == emp.lower():
-                    row_num = i
-                    break
-
-            if not row_num:
-                continue
-
-            has_data = False
-            for field, col in mapping.items():
-                if field not in ("Date", "Employee Name"):
-                    if field == "Report Status":
-                        continue
-                    if col - 1 < len(all_values[row_num - 1]) and all_values[row_num - 1][col - 1].strip():
-                        if all_values[row_num - 1][col - 1].strip() not in ["", "Not Sent", "Invalid", "Quota Error"]:
-                            has_data = True
-                            break
-
-            if not has_data:
-                col_letter = gspread.utils.rowcol_to_a1(row_num, first_data_col).rstrip("0123456789")
-                range_str = f"{col_letter}{row_num}"
-                updates.append({"range": range_str, "values": [["Not Sent"]]})
-
-        if updates:
-            for update in updates:
-                ws.update(update["range"], update["values"], value_input_option="USER_ENTERED")
-                self._apply_formatting(ws, update["range"])
-            key = (department, date_str)
-            if key in self._worksheet_data_cache:
-                del self._worksheet_data_cache[key]
-            logger.info(f"Marked {len(updates)} employee(s) as 'Not Sent' for {date_str}")
+        self.mark_all_as_not_sent(department, date_str)
 
     @with_retry()
     def mark_invalid_report(self, department: str, date_str: str, employee_name: str) -> None:
