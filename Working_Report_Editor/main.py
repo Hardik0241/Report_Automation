@@ -248,7 +248,7 @@ class ReportProcessor:
                 email_data["report_status"] = "Email (screenshot mismatch)"
                 logger.info(f"📊 {canonical_name}: Email values written despite screenshot mismatch")
             else:
-                email_data["report_status"] = ""  # This clears "Not Sent" when data is written
+                email_data["report_status"] = ""
 
             self.sheets.ensure_date_for_all_employees(dept, date_str)
             self.sheets.ensure_status_column(dept, date_str)
