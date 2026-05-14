@@ -3,36 +3,67 @@
 ## Project Structure
 
 Report_Automation/
+
 ├── .github/
+
 │ └── workflows/
+
 │ └── scheduler.yml ← GitHub Actions scheduler (runs every 30 min, 7 PM - 11:59 PM IST)
+
 ├── Working_Report_Editor/
+
 │ ├── main.py ← Pipeline orchestrator
+
 │ ├── dashboard.py ← Streamlit monitoring dashboard
+
 │ ├── config.py ← All configuration settings
+
 │ ├── config.yaml ← Model configuration
+
 │ ├── gmail_reader.py ← Gmail fetch + attachment download (READ ONLY)
+
 │ ├── gemini_parser.py ← Email body → structured data (Gemini + regex fallback)
+
 │ ├── vision_parser.py ← Callyzer screenshot → data (Gemini Vision + OCR fallback)
+
 │ ├── sheets_service.py ← Google Sheets read/write (Cached API calls, Calibri 13, borders)
+
 │ ├── validator.py ← Name fuzzy-match, date check, field validation
+
 │ ├── tracker.py ← CSV logging + permanent duplicate detection
+
 │ ├── error_handler.py ← Custom exceptions + retry decorator
+
 │ ├── utils.py ← Date/duration/email helpers (handles +7 minutes addition)
+
 │ ├── test_connection.py ← Smoke tests (run before going live)
+
 │ ├── encode_token.py ← Encode token.pickle for GitHub secrets
+
 │ ├── get_refresh_token.py ← Get OAuth refresh token
+
 │ ├── scheduler.py ← Local scheduler (for local deployment)
+
 │ ├── requirements.txt ← Python dependencies
+
 │ ├── runtime.txt ← Python version (3.11)
+
 │ ├── .python-version ← Python version for GitHub Actions
+
 │ ├── .env.example ← Copy to .env and fill values
+
 │ └── logs/
+
 │ ├── processing_logs.csv ← Success/failure logs (auto-committed to GitHub)
+
 │ ├── error_logs.jsonl ← Detailed error logs
+
 │ └── duplicate_cache.json ← Permanent duplicate tracking (24-hour window)
+
 ├── .gitignore ← Git ignore rules (allows processing_logs.csv)
+
 ├── LICENSE
+
 └── README.md
 
 
@@ -74,14 +105,17 @@ This automated system reads daily work reports from Gmail, extracts data using G
 
 ---
 
+
 ## Step 1 — Install Dependencies
 
 ```bash
 cd Working_Report_Editor
 pip install -r requirements.txt
+```
 
 
 Step 2 — Google Cloud Setup (One-time)
+
 2.1 Create Project & Enable APIs
 Go to console.cloud.google.com
 
@@ -95,6 +129,7 @@ Google Sheets API
 
 Google Drive API
 
+
 2.2 Create OAuth 2.0 Credentials (for Gmail)
 Go to APIs & Services → Credentials
 
@@ -106,10 +141,12 @@ Name: Report Automation
 
 Download JSON and rename to client_secret.json
 
+
 2.3 Get Refresh Token
 bash
 python get_refresh_token.py
 Follow the browser authentication. Copy the client_id, client_secret, and refresh_token for GitHub Secrets.
+
 
 2.4 Create Service Account (for Sheets)
 Go to IAM & Admin → Service Accounts
@@ -128,8 +165,10 @@ Click on the service account → Keys → Add Key → JSON → Download
 
 Rename to credentials.json
 
+
 2.5 Share Google Sheets
 Open each spreadsheet (Sales + HR) → Share → Add the service account email with Editor access.
+
 
 Step 3 — Get Gemini API Key
 Go to aistudio.google.com
@@ -137,6 +176,7 @@ Go to aistudio.google.com
 Click Get API Key
 
 Copy the key (starts with AIza)
+
 
 Step 4 — Configure GitHub Secrets
 Go to your GitHub repository → Settings → Secrets and variables → Actions → Add these secrets:
@@ -156,10 +196,11 @@ https://docs.google.com/spreadsheets/d/THIS_IS_YOUR_ID/edit
 Step 5 — Configure Streamlit Cloud Secrets
 If deploying dashboard to Streamlit Cloud, add the same secrets in Streamlit Cloud → Settings → Secrets.
 
+
 Step 6 — Update Employee Lists
 Edit config.py:
 
-python
+
 SALES_EMPLOYEES = [
     "Apoorva", "Abhijit", "Sakib", "Jayesh", "Saif", "Rajesh",
     "Manasvi", "Praful", "Sachin", "Aishwary", "Supriya", "Sayli", 
@@ -172,7 +213,7 @@ HR_EMPLOYEES = [
 Email to Name Mapping
 Update email maps in config.py:
 
-python
+
 SALES_EMAIL_MAP = {
     "apoorva.edujam@gmail.com": "Apoorva",
     "abhijit.edujam@gmail.com": "Abhijit",
@@ -185,6 +226,8 @@ HR_EMAIL_MAP = {
     "mehvish.hredujam@gmail.com": "Mehvish",
     "salomi.hredujam@gmail.com": "Salomi",
 }
+
+
 Step 7 — Configure Schedule
 The scheduler runs on GitHub Actions:
 
@@ -194,24 +237,33 @@ Time (IST)	Action
 Weekends (Sat-Sun)	No processing (scheduler skips)
 To modify schedule, edit .github/workflows/scheduler.yml:
 
-yaml
+
 - cron: '30,0 13-18 * * 1-5'   # Every 30 min from 13:30 to 18:30 UTC, Monday-Friday
 - cron: '30 18 * * 1-5'          # Final run at 18:30 UTC, Monday-Friday
+
+
 Step 8 — Run Smoke Tests
-bash
+
+
 cd Working_Report_Editor
 python test_connection.py
 All 5 tests should pass before continuing.
 
+
 Step 9 — Deploy
+
 Local / Manual Run
-bash
+
 python main.py
+
+
 Streamlit Dashboard
-bash
+
 streamlit run dashboard.py
 GitHub Actions (Automatic)
 Push to GitHub - scheduler runs automatically. No manual intervention needed.
+
+
 
 📧 Email Format Guidelines
 Sales Department (Recommended Format)
@@ -252,6 +304,7 @@ Total Line ups for tomorrow: 0
 Subject Line
 Any subject is fine (system uses sender email for identification). Emails are filtered by sender email (only allowed senders).
 
+
 📊 Google Sheet Formatting
 Property	Value
 Font	Calibri
@@ -274,6 +327,9 @@ No Screenshot	Email received without screenshot attachment
 Not Sent	No email received by deadline (auto-marked at start of day)
 Email Only	Default status when no screenshot
 Email (screenshot mismatch)	Mismatch detected but email values written
+
+
+
 🔄 How the Pipeline Works
 text
 Unread email detected (from allowed sender)
@@ -312,6 +368,9 @@ Unread email detected (from allowed sender)
         │
         ▼
 ⑩ Auto-commit logs to GitHub (dashboard updates)
+
+
+
 📊 Dashboard Features
 Section	Description
 KPI Cards	Total Processed, Success, Failed, Success Rate, Today's Success (deduplicated stats)
@@ -320,6 +379,8 @@ Department Distribution	Pie chart of Sales vs HR reports (unique employees)
 Refresh Button	Manual refresh (resets dashboard, clears logs file)
 Employee Registry	Shows Sales Team (16) and HR Team (4) counts
 Dashboard URL: (after deploying to Streamlit Cloud)
+
+
 
 🛠️ Common Issues & Fixes
 Problem	Cause	Fix
@@ -335,11 +396,15 @@ HR emails detected as Sales	Missing HR keywords	Add "hr", "interview", "recruitm
 Duration off by minutes	Email had +7 minutes pattern	Parser now handles addition patterns
 Weekend processing	Scheduler runs on weekends	Added is_weekday() check
 Previous day's emails processed	No date validation	Added _is_today_date() check
+
+
+
 🔧 Configuration Tweaks
 Reduce Quota Usage
+
 In config.py:
 
-python
+
 MAX_EMAILS_PER_RUN = 5  # Process only 5 emails per run
 Change Active Window
 
@@ -362,6 +427,7 @@ In sheets_service.py:
 
 self._cache_ttl_seconds = 60  # Cache expires after 60 seconds (increase to reduce API calls)
 
+
 📝 File Descriptions
 File	Purpose
 main.py	Main orchestrator - processes emails, validates, writes to sheets
@@ -378,6 +444,9 @@ scheduler.py	Local scheduler (for local deployment)
 config.py	All configuration settings
 test_connection.py	Smoke tests
 .github/workflows/scheduler.yml	GitHub Actions workflow (runs every 30 min, weekdays only)
+
+
+
 🚨 Support
 If you encounter issues:
 
@@ -389,8 +458,10 @@ Run python test_connection.py locally
 
 Verify all secrets are correctly set in GitHub
 
+
 📜 License
 This project is proprietary and confidential.
+
 
 ✅ Final Checklist
 Python 3.11 installed
