@@ -3,6 +3,7 @@ gemini_parser.py — Parse email body into structured data using Gemini.
 UPDATED: Enhanced fallback for Sales duration parsing and "Leave" detection
 UPDATED: Fixed duration extraction for proper hour/minute/second capture
 UPDATED: Enhanced grab() function to handle "Connected: 38" format with colon
+UPDATED: Added regex fallback to handle Gemini API quota errors gracefully
 """
 
 import json
@@ -85,12 +86,17 @@ class GeminiParser:
 
         prompt = _BASE_PROMPT + body[:5000]
 
+        data = None
         try:
             response = self.model.generate_content(prompt)
             raw_text = response.text.strip()
             data = self._extract_json(raw_text)
         except Exception as exc:
-            logger.warning(f"Gemini call failed ({exc}); trying regex fallback.")
+            # Log the error but continue with fallback (don't fail completely)
+            if "429" in str(exc) or "quota" in str(exc).lower():
+                logger.warning(f"⚠️ Gemini API quota exceeded - using regex fallback parser")
+            else:
+                logger.warning(f"Gemini call failed ({exc}); trying regex fallback.")
             data = None
 
         if data is None:
