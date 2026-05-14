@@ -3,6 +3,7 @@ sheets_service.py — Google Sheets operations with Calibri font, size 13, cente
 Handles: Not Sent, Invalid Report, Quota Error, actual data
 Formatting: Dark black text (#000000), All borders on data cells
 ADDED: get_column_mapping method for checking existing data
+ADDED: Caching to reduce API calls and prevent rate limiting
 """
 
 import logging
@@ -59,6 +60,9 @@ class SheetsService:
         logger.info("Connected to Sales and HR spreadsheets")
         self._emp_cache: Dict[Tuple[str, str], Dict[str, int]] = {}
         self._ws_cache: Dict[Tuple[str, str], gspread.Worksheet] = {}
+        self._worksheet_data_cache: Dict[Tuple[str, str], List[List[str]]] = {}
+        self._cache_timestamp: Dict[Tuple[str, str], datetime] = {}
+        self._cache_ttl_seconds = 60
 
     def _spreadsheet(self, department: str):
         return self._sales_ss if department == "Sales" else self._hr_ss
@@ -68,11 +72,23 @@ class SheetsService:
         return datetime.strptime(date_str, DATE_IN_SUBJECT_FORMAT).strftime(SHEET_NAME_FORMAT)
     
     def get_column_mapping(self, department: str) -> Dict:
-        """Return column mapping for the department"""
         return SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
 
+    def _get_cached_worksheet_data(self, department: str, date_str: str) -> List[List[str]]:
+        key = (department, date_str)
+        now = datetime.now()
+        
+        if key in self._worksheet_data_cache and key in self._cache_timestamp:
+            if (now - self._cache_timestamp[key]).seconds < self._cache_ttl_seconds:
+                return self._worksheet_data_cache[key]
+        
+        ws = self._get_worksheet(department, date_str)
+        data = ws.get_all_values()
+        self._worksheet_data_cache[key] = data
+        self._cache_timestamp[key] = now
+        return data
+
     def _apply_formatting(self, ws: gspread.Worksheet, range_str: str = None) -> None:
-        """Apply Calibri font size 13, dark black text, and all borders"""
         try:
             if range_str is None:
                 range_str = "A1:Z1000"
@@ -141,7 +157,6 @@ class SheetsService:
             logger.warning(f"Formatting failed: {e}")
 
     def ensure_status_column(self, department: str, date_str: str) -> None:
-        """Ensure 'Report Status' column exists in Sales sheet ONLY"""
         if department != "Sales":
             return
         
@@ -185,7 +200,9 @@ class SheetsService:
     def ensure_date_for_all_employees(self, department: str, date_str: str) -> None:
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
         ws = self._get_worksheet(department, date_str)
-        all_values = ws.get_all_values()
+        
+        all_values = self._get_cached_worksheet_data(department, date_str)
+        
         has_date = set()
         for row in all_values[1:]:
             if row and row[0].strip() == date_str:
@@ -201,12 +218,15 @@ class SheetsService:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
             for update in updates:
                 self._apply_formatting(ws, update["range"])
+            key = (department, date_str)
+            if key in self._worksheet_data_cache:
+                del self._worksheet_data_cache[key]
             logger.info(f"Added date for {len(updates)} employees in {department}")
 
     @with_retry()
     def find_employee_row(self, department: str, date_str: str, employee_name: str) -> Optional[int]:
         ws = self._get_worksheet(department, date_str)
-        all_values = ws.get_all_values()
+        all_values = self._get_cached_worksheet_data(department, date_str)
         for i, row in enumerate(all_values[1:], start=2):
             if row and row[0].strip() == date_str and row[1].strip().lower() == employee_name.lower():
                 return i
@@ -214,7 +234,6 @@ class SheetsService:
 
     @with_retry()
     def write_batch(self, department: str, date_str: str, updates: List[Tuple[int, Dict]]) -> None:
-        """Write data to Google Sheets - ALWAYS writes email body values with borders"""
         if not updates:
             return
         ws = self._get_worksheet(department, date_str)
@@ -246,11 +265,13 @@ class SheetsService:
             ws.batch_update(batch_requests, value_input_option="USER_ENTERED")
             for range_str in ranges_to_format:
                 self._apply_formatting(ws, range_str)
+            key = (department, date_str)
+            if key in self._worksheet_data_cache:
+                del self._worksheet_data_cache[key]
             logger.info(f"Batch wrote {len(batch_requests)} rows to {ws.title}")
 
     @with_retry()
     def mark_not_sent(self, department: str, date_str: str) -> None:
-        """Mark employees who didn't submit any report by deadline - Sales only"""
         if department != "Sales":
             return
 
@@ -259,7 +280,7 @@ class SheetsService:
         mapping = SALES_COLUMN_MAPPING
 
         first_data_col = min(col for field, col in mapping.items() if field not in ("Date", "Employee Name"))
-        all_values = ws.get_all_values()
+        all_values = self._get_cached_worksheet_data(department, date_str)
         updates = []
 
         for emp in employees:
@@ -291,11 +312,13 @@ class SheetsService:
             for update in updates:
                 ws.update(update["range"], update["values"], value_input_option="USER_ENTERED")
                 self._apply_formatting(ws, update["range"])
+            key = (department, date_str)
+            if key in self._worksheet_data_cache:
+                del self._worksheet_data_cache[key]
             logger.info(f"Marked {len(updates)} employee(s) as 'Not Sent' for {date_str}")
 
     @with_retry()
     def mark_invalid_report(self, department: str, date_str: str, employee_name: str) -> None:
-        """Mark a specific employee's report as 'Invalid' in status column - Sales only"""
         if department != "Sales":
             return
 
@@ -313,7 +336,7 @@ class SheetsService:
             ws.update_cell(1, status_col, "Report Status")
             self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
         
-        all_values = ws.get_all_values()
+        all_values = self._get_cached_worksheet_data(department, date_str)
         row_num = None
 
         for i, row in enumerate(all_values[1:], start=2):
@@ -331,11 +354,13 @@ class SheetsService:
         range_str = f"{col_letter}{row_num}"
         ws.update(range_str, [["Invalid"]], value_input_option="USER_ENTERED")
         self._apply_formatting(ws, range_str)
+        key = (department, date_str)
+        if key in self._worksheet_data_cache:
+            del self._worksheet_data_cache[key]
         logger.info(f"Marked {employee_name} as 'Invalid' for {date_str}")
 
     @with_retry()
     def mark_quota_error(self, department: str, date_str: str, employee_name: str) -> None:
-        """Mark a specific employee's report as 'Quota Error' when Gemini API quota is exceeded"""
         if department != "Sales":
             return
 
@@ -353,7 +378,7 @@ class SheetsService:
             ws.update_cell(1, status_col, "Report Status")
             self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
         
-        all_values = ws.get_all_values()
+        all_values = self._get_cached_worksheet_data(department, date_str)
         row_num = None
 
         for i, row in enumerate(all_values[1:], start=2):
@@ -371,6 +396,9 @@ class SheetsService:
         range_str = f"{col_letter}{row_num}"
         ws.update(range_str, [["Quota Error"]], value_input_option="USER_ENTERED")
         self._apply_formatting(ws, range_str)
+        key = (department, date_str)
+        if key in self._worksheet_data_cache:
+            del self._worksheet_data_cache[key]
         logger.info(f"Marked {employee_name} as 'Quota Error' for {date_str}")
 
     def list_sheets(self, department: str) -> List[str]:
@@ -378,7 +406,7 @@ class SheetsService:
 
     def get_employees_for_date(self, department: str, date_str: str) -> Dict[str, int]:
         ws = self._get_worksheet(department, date_str)
-        all_values = ws.get_all_values()
+        all_values = self._get_cached_worksheet_data(department, date_str)
         emp_rows = {}
         for i, row in enumerate(all_values[1:], start=2):
             row_date = row[0].strip() if len(row) > 0 else ""
