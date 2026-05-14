@@ -9,6 +9,7 @@ UPDATED: Duplicate emails SKIP silently — no DUPLICATE log entry
 UPDATED: Report Status column now always gets "Email Only" as default
 UPDATED: Only process emails from today's date (ignores previous days)
 UPDATED: Emails REMAIN UNREAD in Gmail (no mark_as_read)
+UPDATED: Mark ALL employees as "Not Sent" at start of day processing
 """
 
 import logging
@@ -41,6 +42,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 PROCESSED_EMAILS = set()
+_DATE_MARKED_NOT_SENT: Dict[str, bool] = {}
 
 
 class ReportProcessor:
@@ -107,6 +109,19 @@ class ReportProcessor:
             logger.warning(f"Error comparing dates: {e}")
             return False
 
+    def _mark_all_as_not_sent_for_date(self, dept: str, date_str: str) -> None:
+        """Mark all employees as 'Not Sent' for this date (once per date per department)"""
+        key = f"{dept}_{date_str}"
+        if key in _DATE_MARKED_NOT_SENT:
+            return
+        
+        logger.info(f"📝 Marking all {dept} employees as 'Not Sent' for {date_str}")
+        try:
+            self.sheets.mark_all_as_not_sent(dept, date_str)
+            _DATE_MARKED_NOT_SENT[key] = True
+        except Exception as e:
+            logger.error(f"Failed to mark 'Not Sent' for {dept} on {date_str}: {e}")
+
     def process_email(self, email: Dict) -> Dict:
         t0 = time.time()
         email_id = email.get("id", "")
@@ -153,6 +168,9 @@ class ReportProcessor:
                 return _fail(f"Sender '{sender_email}' not in department maps")
 
             date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
+
+            # Mark all employees as "Not Sent" for this date (first email of the day triggers this)
+            self._mark_all_as_not_sent_for_date(dept, date_str)
 
             if not self._is_today_date(date_str):
                 logger.info(f"⏭️ Skipping email from {date_str} (not today's date) - will remain unread")
@@ -230,7 +248,7 @@ class ReportProcessor:
                 email_data["report_status"] = "Email (screenshot mismatch)"
                 logger.info(f"📊 {canonical_name}: Email values written despite screenshot mismatch")
             else:
-                email_data["report_status"] = "Email Only"
+                email_data["report_status"] = ""  # This clears "Not Sent" when data is written
 
             self.sheets.ensure_date_for_all_employees(dept, date_str)
             self.sheets.ensure_status_column(dept, date_str)
@@ -260,8 +278,9 @@ class ReportProcessor:
         self._write_buffer.clear()
 
     def run(self) -> List[Dict]:
-        global PROCESSED_EMAILS
+        global PROCESSED_EMAILS, _DATE_MARKED_NOT_SENT
         PROCESSED_EMAILS = set()
+        _DATE_MARKED_NOT_SENT = {}
         
         logger.info("=" * 60)
         logger.info("Report Processor started")
