@@ -3,6 +3,7 @@ dashboard.py — Report Automation Dashboard
 Refresh Button clears logs file AND resets dashboard to zero
 With hover effects, glow animations, and button press effects
 UPDATED: Statistics now count unique employees per date (no duplicates)
+UPDATED: Recent activity shows one entry per employee per day (SUCCESS preferred)
 """
 
 import os
@@ -15,15 +16,12 @@ from config import HR_EMPLOYEES, SALES_EMPLOYEES
 
 st.set_page_config(page_title="Report Automation Dashboard", page_icon="📊", layout="wide")
 
-# Dark mode CSS with Hover Effects & Glowing Animations
 st.markdown("""
 <style>
-    /* Main container */
     .stApp {
         background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
     }
     
-    /* Metric Cards - With Glow Effect on Hover */
     div[data-testid="stMetric"] {
         background: linear-gradient(135deg, #1e2a3a 0%, #0f172a 100%);
         border-radius: 16px;
@@ -34,14 +32,12 @@ st.markdown("""
         cursor: pointer;
     }
     
-    /* Hover Effect - Glow and Lift */
     div[data-testid="stMetric"]:hover {
         transform: translateY(-5px);
         border-color: #3b82f6;
         box-shadow: 0 8px 25px rgba(59,130,246,0.4), 0 0 15px rgba(59,130,246,0.3);
     }
     
-    /* Different glowing colors for different cards */
     div[data-testid="stMetric"]:nth-child(2):hover {
         border-color: #3b82f6;
         box-shadow: 0 8px 25px rgba(59,130,246,0.4), 0 0 15px rgba(59,130,246,0.3);
@@ -67,7 +63,6 @@ st.markdown("""
         box-shadow: 0 8px 25px rgba(139,92,246,0.4), 0 0 15px rgba(139,92,246,0.3);
     }
     
-    /* Metric text styling */
     div[data-testid="stMetric"] label {
         color: #94a3b8 !important;
         font-size: 0.85rem !important;
@@ -92,7 +87,6 @@ st.markdown("""
         display: inline-block;
     }
     
-    /* Header styling with hover effect */
     .dashboard-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
         padding: 1.5rem 2rem;
@@ -120,7 +114,6 @@ st.markdown("""
         font-size: 0.85rem;
     }
     
-    /* Section Headers with underline animation */
     .section-header {
         font-size: 1.2rem;
         font-weight: 600;
@@ -137,7 +130,6 @@ st.markdown("""
         color: #ffffff;
     }
     
-    /* Sidebar styling */
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
         border-right: 1px solid #334155;
@@ -153,7 +145,6 @@ st.markdown("""
         font-weight: 600 !important;
     }
     
-    /* Refresh Button - Glowing effect and press animation */
     .stButton button {
         background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white !important;
@@ -189,7 +180,6 @@ st.markdown("""
         }
     }
     
-    /* Data Table styling with hover effect */
     [data-testid="stDataFrame"] {
         background: #13161c;
         border-radius: 12px;
@@ -219,7 +209,6 @@ st.markdown("""
         background-color: #1e293b !important;
     }
     
-    /* Info Box */
     .stAlert {
         background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
         border: 1px solid #334155;
@@ -227,7 +216,6 @@ st.markdown("""
         color: #94a3b8 !important;
     }
     
-    /* Success message */
     .stSuccess {
         background: linear-gradient(135deg, #064e3b 0%, #022c22 100%);
         border: 1px solid #22c55e;
@@ -239,7 +227,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(34,197,94,0.3);
     }
     
-    /* Footer */
     .footer {
         text-align: center;
         padding: 1.5rem;
@@ -254,7 +241,6 @@ st.markdown("""
         border-top-color: #3b82f6;
     }
     
-    /* Divider */
     hr {
         border-color: #334155 !important;
         margin: 1rem 0 !important;
@@ -264,7 +250,6 @@ st.markdown("""
 
 
 def clear_logs_file():
-    """Clear the contents of processing_logs.csv while keeping headers"""
     possible_paths = [
         "logs/processing_logs.csv",
         "Working_Report_Editor/logs/processing_logs.csv",
@@ -310,16 +295,17 @@ def load_logs():
 
 
 def get_stats(df: pd.DataFrame) -> dict:
-    """Get statistics with unique employee counts (no duplicates per day)"""
     if df.empty:
         return {"total": 0, "success": 0, "failed": 0, "rate": 0, "today_success": 0}
 
-    # Count unique successes (by employee + date) - prevents duplicates
     success_df = df[df["Status"] == "SUCCESS"]
     unique_successes = success_df[["Department", "Employee_Name", "Date"]].drop_duplicates()
     success = len(unique_successes)
     
-    failed = len(df[df["Status"] == "FAILED"])
+    failed_df = df[df["Status"] == "FAILED"]
+    unique_failures = failed_df[["Department", "Employee_Name", "Date"]].drop_duplicates()
+    failed = len(unique_failures)
+    
     total = success + failed
     
     rate = (success / total * 100) if total > 0 else 0
@@ -327,7 +313,6 @@ def get_stats(df: pd.DataFrame) -> dict:
     return {"total": total, "success": success, "failed": failed, "rate": round(rate, 1), "today_success": success}
 
 
-# Initialize session state for reset flag
 if "reset_dashboard" not in st.session_state:
     st.session_state.reset_dashboard = False
 
@@ -359,7 +344,6 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Check if reset was triggered
 if st.session_state.reset_dashboard:
     st.session_state.reset_dashboard = False
     
@@ -379,7 +363,6 @@ if st.session_state.reset_dashboard:
     st.success("✅ Dashboard has been reset. The log file has been cleared.")
     st.stop()
 
-# Normal data load
 df = load_logs()
 stats = get_stats(df)
 
@@ -387,7 +370,6 @@ if df.empty:
     st.info("📭 No data available. Reports will appear here automatically after the next scheduled run (7:00 PM - 11:59 PM).")
     st.stop()
 
-# KPI Cards - 5 cards
 c1, c2, c3, c4, c5 = st.columns(5)
 with c1:
     st.metric("📧 Total Processed", stats["total"])
@@ -403,20 +385,38 @@ with c5:
 st.markdown("---")
 
 st.markdown('<div class="section-header">📨 Recent Activity</div>', unsafe_allow_html=True)
-recent = df.sort_values("Timestamp", ascending=False).head(15)
+
+# Get unique recent activity (one per employee per day, SUCCESS preferred)
+recent_df = df.sort_values("Timestamp", ascending=False)
+
+# Keep only the latest status per employee per day
+unique_records = {}
+for _, row in recent_df.iterrows():
+    key = (row.get("Department", ""), row.get("Employee_Name", ""), row.get("Date", ""))
+    if key not in unique_records:
+        unique_records[key] = row
+    else:
+        existing_status = unique_records[key].get("Status")
+        new_status = row.get("Status")
+        if existing_status == "FAILED" and new_status == "SUCCESS":
+            unique_records[key] = row
+
+unique_df = pd.DataFrame(list(unique_records.values()))
+recent = unique_df.sort_values("Timestamp", ascending=False).head(15)
 
 if not recent.empty:
     display = recent[["Timestamp", "Status", "Department", "Employee_Name", "Date", "Reason"]].copy()
     display.columns = ["Time", "Status", "Dept", "Employee", "Report Date", "Reason"]
     display["Time"] = display["Time"].dt.strftime("%d-%b %I:%M:%S %p")
     st.dataframe(display, use_container_width=True, hide_index=True)
+else:
+    st.info("No recent activity")
 
 st.markdown("---")
 
 st.markdown('<div class="section-header">🏢 Department Distribution</div>', unsafe_allow_html=True)
 if "Department" in df.columns and "Status" in df.columns:
     success_df = df[df["Status"] == "SUCCESS"]
-    # Use unique successes for pie chart
     unique_successes = success_df[["Department", "Employee_Name", "Date"]].drop_duplicates()
     dept_data = unique_successes["Department"].value_counts().reset_index()
     if not dept_data.empty:
