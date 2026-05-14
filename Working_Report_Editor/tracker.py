@@ -1,7 +1,7 @@
 """
 tracker.py — Email processing tracker with proper logging and duplicate detection
 Prevents processing same email multiple times
-UPDATED: Enhanced duplicate detection to prevent multiple SUCCESS entries for same employee/date
+UPDATED: Enhanced duplicate detection to prevent multiple SUCCESS/FAILED entries for same employee/date
 """
 
 import csv
@@ -29,7 +29,6 @@ _CSV_COLUMNS = [
 
 class Tracker:
     def __init__(self):
-        # Create logs directory in multiple possible locations for safety
         for path in [LOG_DIR, "logs", "Working_Report_Editor/logs"]:
             try:
                 os.makedirs(path, exist_ok=True)
@@ -37,16 +36,12 @@ class Tracker:
             except Exception as e:
                 logger.warning(f"Could not create {path}: {e}")
         
-        # Set the actual path to use
         self.log_path = PROCESSING_LOG_PATH
         if not os.path.exists(LOG_DIR):
             self.log_path = "logs/processing_logs.csv"
         
         self._init_csv()
         self._init_cache()
-        
-        # Track successful processed (employee, date) pairs to prevent duplicate SUCCESS logs
-        self._success_cache: Set[Tuple[str, str, str]] = set()  # (department, employee_name, date)
 
     def _init_csv(self):
         try:
@@ -108,12 +103,25 @@ class Tracker:
         return self.is_duplicate(email_hash)
     
     def has_success_for_employee(self, department: str, employee_name: str, date: str) -> bool:
-        """Check if there's already a SUCCESS log for this employee on this date"""
         try:
             with open(self.log_path, "r", encoding="utf-8") as fh:
                 reader = csv.DictReader(fh)
                 for row in reader:
                     if (row.get("Status") == "SUCCESS" and 
+                        row.get("Department") == department and 
+                        row.get("Employee_Name") == employee_name and 
+                        row.get("Date") == date):
+                        return True
+        except Exception:
+            pass
+        return False
+    
+    def has_failed_for_employee(self, department: str, employee_name: str, date: str) -> bool:
+        try:
+            with open(self.log_path, "r", encoding="utf-8") as fh:
+                reader = csv.DictReader(fh)
+                for row in reader:
+                    if (row.get("Status") == "FAILED" and 
                         row.get("Department") == department and 
                         row.get("Employee_Name") == employee_name and 
                         row.get("Date") == date):
@@ -128,10 +136,13 @@ class Tracker:
                    sender_email: str = "", sender_name: str = "",
                    received_time: Optional[datetime] = None) -> None:
         
-        # IMPORTANT: Skip logging if this is a SUCCESS and we already have a SUCCESS for this employee/date
-        if status == "SUCCESS":
-            if self.has_success_for_employee(department, employee_name, date):
-                logger.info(f"⏭️ Skipping duplicate SUCCESS log for {employee_name} on {date} - already recorded")
+        if self.has_success_for_employee(department, employee_name, date):
+            logger.info(f"⏭️ Skipping {status} log for {employee_name} on {date} - SUCCESS already recorded")
+            return
+        
+        if status == "FAILED":
+            if self.has_failed_for_employee(department, employee_name, date):
+                logger.info(f"⏭️ Skipping duplicate FAILED log for {employee_name} on {date} - already logged today")
                 return
         
         received_iso = received_time.isoformat() if received_time else ""
@@ -164,29 +175,65 @@ class Tracker:
         except Exception:
             rows = []
         
-        # Count unique successes (by employee + date)
         unique_successes = set()
+        unique_failures = set()
+        
         for r in rows:
             if r.get("Status") == "SUCCESS":
                 key = (r.get("Department", ""), r.get("Employee_Name", ""), r.get("Date", ""))
                 unique_successes.add(key)
+            elif r.get("Status") == "FAILED":
+                key = (r.get("Department", ""), r.get("Employee_Name", ""), r.get("Date", ""))
+                unique_failures.add(key)
         
-        total = len(rows)
-        success = len(unique_successes)  # Count unique successes, not total log entries
-        failed = sum(1 for r in rows if r.get("Status") == "FAILED")
-        duplicate = sum(1 for r in rows if r.get("Status") == "DUPLICATE")
+        total = len(unique_successes) + len(unique_failures)
+        success = len(unique_successes)
+        failed = len(unique_failures)
         
         return {
             "total": total,
             "success": success,
             "failed": failed,
-            "duplicate": duplicate,
-            "success_rate": round(success / len(unique_successes) * 100, 1) if unique_successes else 0.0,
+            "rate": round(success / total * 100, 1) if total > 0 else 0,
+            "today_success": success,
         }
 
     def get_failed_rows(self) -> List[Dict]:
         try:
             with open(self.log_path, "r", encoding="utf-8") as fh:
-                return [r for r in csv.DictReader(fh) if r.get("Status") == "FAILED"]
+                rows = list(csv.DictReader(fh))
+                seen = set()
+                unique_failures = []
+                for r in rows:
+                    if r.get("Status") == "FAILED":
+                        key = (r.get("Department", ""), r.get("Employee_Name", ""), r.get("Date", ""))
+                        if key not in seen:
+                            seen.add(key)
+                            unique_failures.append(r)
+                return unique_failures
+        except Exception:
+            return []
+    
+    def get_recent_activity(self, limit: int = 15) -> List[Dict]:
+        try:
+            with open(self.log_path, "r", encoding="utf-8") as fh:
+                rows = list(csv.DictReader(fh))
+            
+            latest_per_employee: Dict[Tuple[str, str, str], Dict] = {}
+            
+            for row in rows:
+                key = (row.get("Department", ""), row.get("Employee_Name", ""), row.get("Date", ""))
+                if key not in latest_per_employee:
+                    latest_per_employee[key] = row
+                else:
+                    existing_status = latest_per_employee[key].get("Status")
+                    new_status = row.get("Status")
+                    if existing_status == "FAILED" and new_status == "SUCCESS":
+                        latest_per_employee[key] = row
+            
+            unique_rows = list(latest_per_employee.values())
+            unique_rows.sort(key=lambda x: x.get("Timestamp", ""), reverse=True)
+            
+            return unique_rows[:limit]
         except Exception:
             return []
