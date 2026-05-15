@@ -4,11 +4,13 @@ Handles: Not Sent, Invalid Report, Quota Error, actual data
 Formatting: Dark black text (#000000), All borders on data cells
 UPDATED: Fixed write_batch() to properly clear "Not Sent" status when data is written
 UPDATED: Ensures Calibri font, size 13, center alignment, and all borders for every write operation
+UPDATED: Fixed row index validation to prevent 400 errors
 """
 
 import logging
 import json
 import os
+import re
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -103,23 +105,57 @@ class SheetsService:
         """
         try:
             if range_str is None:
-                # Apply to entire sheet if no range specified
-                range_str = "A1:Z1000"
+                # Get the actual used range
+                all_values = ws.get_all_values()
+                if not all_values:
+                    return
+                max_row = len(all_values)
+                max_col = len(all_values[0]) if all_values else 10
+                # Limit to reasonable range to avoid API errors
+                max_row = min(max_row, 500)
+                max_col = min(max_col, 20)
+                range_str = f"A1:{gspread.utils.rowcol_to_a1(max_row, max_col)}"
             
             sheet_id = ws.id
             
-            # Parse the range to get cell coordinates
+            # Parse the range safely
+            start_row_num = 1
+            end_row_num = 100
+            start_col = "A"
+            end_col = "Z"
+            
             if ":" in range_str:
                 start_cell, end_cell = range_str.split(":")
-                start_row = int(''.join(filter(str.isdigit, start_cell))) if any(c.isdigit() for c in start_cell) else 1
+                
+                # Extract row numbers safely
+                start_row_match = re.search(r'(\d+)$', start_cell)
+                end_row_match = re.search(r'(\d+)$', end_cell)
+                
+                if start_row_match:
+                    start_row_num = int(start_row_match.group(1))
+                if end_row_match:
+                    end_row_num = int(end_row_match.group(1))
+                
+                # VALIDATE: Ensure end_row_num >= start_row_num
+                if end_row_num < start_row_num:
+                    logger.warning(f"Invalid range: endRow {end_row_num} < startRow {start_row_num}, swapping")
+                    start_row_num, end_row_num = end_row_num, start_row_num
+                
+                # Limit to reasonable number of rows to avoid API errors
+                if end_row_num - start_row_num > 500:
+                    end_row_num = start_row_num + 500
+                    logger.info(f"Limited formatting range to {end_row_num - start_row_num} rows")
+                
+                # Get column letters
                 start_col = ''.join(filter(str.isalpha, start_cell)) or "A"
-                end_row = int(''.join(filter(str.isdigit, end_cell))) if any(c.isdigit() for c in end_cell) else 1000
                 end_col = ''.join(filter(str.isalpha, end_cell)) or "Z"
             else:
                 # Single cell range
-                start_row = int(''.join(filter(str.isdigit, range_str))) if any(c.isdigit() for c in range_str) else 1
+                row_match = re.search(r'(\d+)$', range_str)
+                if row_match:
+                    start_row_num = int(row_match.group(1))
+                    end_row_num = start_row_num
                 start_col = ''.join(filter(str.isalpha, range_str)) or "A"
-                end_row = start_row
                 end_col = start_col
             
             def col_to_index(col_letter):
@@ -136,8 +172,8 @@ class SheetsService:
                 "repeatCell": {
                     "range": {
                         "sheetId": sheet_id,
-                        "startRowIndex": start_row - 1,
-                        "endRowIndex": end_row,
+                        "startRowIndex": start_row_num - 1,
+                        "endRowIndex": end_row_num,
                         "startColumnIndex": start_col_idx,
                         "endColumnIndex": end_col_idx + 1
                     },
@@ -167,7 +203,7 @@ class SheetsService:
             }]
             
             ws.spreadsheet.batch_update({"requests": requests})
-            logger.info(f"Applied formatting (Calibri 13, center aligned, borders) to {ws.title} - Range: {range_str}")
+            logger.info(f"Applied formatting to {ws.title} - Range: {range_str}")
             
         except Exception as e:
             logger.warning(f"Formatting failed for {ws.title}: {e}")
@@ -232,7 +268,6 @@ class SheetsService:
             return
         
         ws = self._get_worksheet(department, date_str)
-        employees = SALES_EMPLOYEES
         
         self.ensure_status_column(department, date_str)
         
@@ -246,7 +281,6 @@ class SheetsService:
         if status_col is None:
             status_col = len(headers) + 1
             ws.update_cell(1, status_col, "Report Status")
-            # Apply formatting to the new header cell
             self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
         
         all_values = self._get_cached_worksheet_data(department, date_str)
@@ -372,12 +406,12 @@ class SheetsService:
             # Write the data
             ws.batch_update(batch_requests, value_input_option="USER_ENTERED")
             
-            # Apply formatting to each written range
+            # Apply formatting to each written range (limit to reasonable size)
             for range_str in ranges_to_format:
                 self._apply_formatting(ws, range_str)
             
             self._invalidate_cache(department, date_str)
-            logger.info(f"Batch wrote {len(batch_requests)} rows to {ws.title} with Calibri 13, center alignment, borders")
+            logger.info(f"Batch wrote {len(batch_requests)} rows to {ws.title}")
 
     @with_retry()
     def mark_not_sent(self, department: str, date_str: str) -> None:
