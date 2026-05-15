@@ -3,6 +3,7 @@ sheets_service.py — Google Sheets operations with Calibri font, size 13, cente
 Handles: Not Sent, Invalid Report, Quota Error, actual data
 Formatting: Dark black text (#000000), All borders on data cells
 UPDATED: Fixed write_batch() to properly clear "Not Sent" status when data is written
+UPDATED: Ensures Calibri font, size 13, center alignment, and all borders for every write operation
 """
 
 import logging
@@ -96,12 +97,18 @@ class SheetsService:
             del self._cache_timestamp[key]
 
     def _apply_formatting(self, ws: gspread.Worksheet, range_str: str = None) -> None:
+        """
+        Apply Calibri font size 13, dark black text, center alignment, and all borders
+        to the specified range or entire sheet if no range specified.
+        """
         try:
             if range_str is None:
+                # Apply to entire sheet if no range specified
                 range_str = "A1:Z1000"
             
             sheet_id = ws.id
             
+            # Parse the range to get cell coordinates
             if ":" in range_str:
                 start_cell, end_cell = range_str.split(":")
                 start_row = int(''.join(filter(str.isdigit, start_cell))) if any(c.isdigit() for c in start_cell) else 1
@@ -109,10 +116,11 @@ class SheetsService:
                 end_row = int(''.join(filter(str.isdigit, end_cell))) if any(c.isdigit() for c in end_cell) else 1000
                 end_col = ''.join(filter(str.isalpha, end_cell)) or "Z"
             else:
-                start_row = 1
-                start_col = "A"
-                end_row = 1000
-                end_col = "Z"
+                # Single cell range
+                start_row = int(''.join(filter(str.isdigit, range_str))) if any(c.isdigit() for c in range_str) else 1
+                start_col = ''.join(filter(str.isalpha, range_str)) or "A"
+                end_row = start_row
+                end_col = start_col
             
             def col_to_index(col_letter):
                 index = 0
@@ -123,6 +131,7 @@ class SheetsService:
             start_col_idx = col_to_index(start_col)
             end_col_idx = col_to_index(end_col)
             
+            # Build the formatting request
             requests = [{
                 "repeatCell": {
                     "range": {
@@ -158,12 +167,13 @@ class SheetsService:
             }]
             
             ws.spreadsheet.batch_update({"requests": requests})
-            logger.info(f"Applied formatting to {ws.title}")
+            logger.info(f"Applied formatting (Calibri 13, center aligned, borders) to {ws.title} - Range: {range_str}")
             
         except Exception as e:
-            logger.warning(f"Formatting failed: {e}")
+            logger.warning(f"Formatting failed for {ws.title}: {e}")
 
     def ensure_status_column(self, department: str, date_str: str) -> None:
+        """Ensure 'Report Status' column exists in Sales sheet ONLY"""
         if department != "Sales":
             return
         
@@ -173,6 +183,7 @@ class SheetsService:
             if "Report Status" not in headers:
                 last_col = len(headers) + 1
                 ws.update_cell(1, last_col, "Report Status")
+                # Apply formatting to the new header cell
                 self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, last_col)}:{gspread.utils.rowcol_to_a1(1, last_col)}")
                 logger.info(f"Added 'Report Status' column to {ws.title}")
         except Exception as e:
@@ -194,13 +205,21 @@ class SheetsService:
         return ws
 
     def _create_worksheet(self, ss: gspread.Spreadsheet, name: str, department: str) -> gspread.Worksheet:
+        """Create a new worksheet with headers and proper formatting"""
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
         headers = SALES_HEADERS if department == "Sales" else HR_HEADERS
         ws = ss.add_worksheet(title=name, rows=str(len(employees) * 35 + 10), cols="20")
+        
+        # Write headers
         ws.update("A1", [headers])
+        
+        # Write employee names in column B
         ws.update(f"B2:B{len(employees) + 1}", [[emp] for emp in employees])
+        
+        # Apply formatting to the entire sheet
         self._apply_formatting(ws)
-        logger.info(f"Created sheet '{name}' for {department}")
+        
+        logger.info(f"Created sheet '{name}' for {department} with Calibri 13, center alignment, borders")
         return ws
 
     def mark_all_as_not_sent(self, department: str, date_str: str) -> None:
@@ -227,21 +246,26 @@ class SheetsService:
         if status_col is None:
             status_col = len(headers) + 1
             ws.update_cell(1, status_col, "Report Status")
+            # Apply formatting to the new header cell
+            self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
         
         all_values = self._get_cached_worksheet_data(department, date_str)
         
         updates = []
+        ranges_to_format = []
         for i, row in enumerate(all_values[1:], start=2):
             row_date = row[0].strip() if len(row) > 0 else ""
             if row_date == date_str:
                 col_letter = gspread.utils.rowcol_to_a1(i, status_col).rstrip("0123456789")
                 range_str = f"{col_letter}{i}"
                 updates.append({"range": range_str, "values": [["Not Sent"]]})
+                ranges_to_format.append(range_str)
         
         if updates:
             for update in updates:
                 ws.update(update["range"], update["values"], value_input_option="USER_ENTERED")
-                self._apply_formatting(ws, update["range"])
+            for range_str in ranges_to_format:
+                self._apply_formatting(ws, range_str)
             self._date_marked_not_sent.add(date_key)
             self._invalidate_cache(department, date_str)
             logger.info(f"Marked {len(updates)} employees as 'Not Sent' for {date_str}")
@@ -259,15 +283,20 @@ class SheetsService:
                 name = row[1].strip() if len(row) > 1 else ""
                 if name:
                     has_date.add(name)
+        
         updates = []
+        ranges_to_format = []
         for emp in employees:
             if emp not in has_date:
-                updates.append({"range": f"A{len(all_values) + 1 + len(updates)}:B{len(all_values) + 1 + len(updates)}",
-                                "values": [[date_str, emp]]})
+                row_num = len(all_values) + 1 + len(updates)
+                range_str = f"A{row_num}:B{row_num}"
+                updates.append({"range": range_str, "values": [[date_str, emp]]})
+                ranges_to_format.append(range_str)
+        
         if updates:
             ws.batch_update(updates, value_input_option="USER_ENTERED")
-            for update in updates:
-                self._apply_formatting(ws, update["range"])
+            for range_str in ranges_to_format:
+                self._apply_formatting(ws, range_str)
             self._invalidate_cache(department, date_str)
             logger.info(f"Added date for {len(updates)} employees in {department}")
 
@@ -281,6 +310,10 @@ class SheetsService:
 
     @with_retry()
     def write_batch(self, department: str, date_str: str, updates: List[Tuple[int, Dict]]) -> None:
+        """
+        Write data to Google Sheets with proper formatting.
+        Always applies Calibri 13, center alignment, and borders to written cells.
+        """
         if not updates:
             return
         ws = self._get_worksheet(department, date_str)
@@ -294,7 +327,7 @@ class SheetsService:
                 status_col = i
                 break
         
-        # If status column doesn't exist, create it
+        # If status column doesn't exist and this is Sales, create it
         if status_col is None and department == "Sales":
             status_col = len(headers) + 1
             ws.update_cell(1, status_col, "Report Status")
@@ -315,8 +348,7 @@ class SheetsService:
                 val = data.get(field, 0 if field != "Duration" else "00:00:00")
                 cell_updates[col] = val
             
-            # CRITICAL FIX: Always update the status column to clear "Not Sent"
-            # If there's a report_status value, use it; otherwise set to empty string
+            # CRITICAL: Always update the status column to clear "Not Sent"
             if status_col:
                 if data.get("report_status"):
                     cell_updates[status_col] = data.get("report_status")
@@ -337,14 +369,19 @@ class SheetsService:
             ranges_to_format.append(range_str)
         
         if batch_requests:
+            # Write the data
             ws.batch_update(batch_requests, value_input_option="USER_ENTERED")
+            
+            # Apply formatting to each written range
             for range_str in ranges_to_format:
                 self._apply_formatting(ws, range_str)
+            
             self._invalidate_cache(department, date_str)
-            logger.info(f"Batch wrote {len(batch_requests)} rows to {ws.title}")
+            logger.info(f"Batch wrote {len(batch_requests)} rows to {ws.title} with Calibri 13, center alignment, borders")
 
     @with_retry()
     def mark_not_sent(self, department: str, date_str: str) -> None:
+        """Legacy method - kept for compatibility. Use mark_all_as_not_sent instead."""
         if department != "Sales":
             return
         self.mark_all_as_not_sent(department, date_str)
