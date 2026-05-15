@@ -9,7 +9,7 @@ UPDATED: Duplicate emails SKIP silently — no DUPLICATE log entry
 UPDATED: Report Status column now always gets cleared when data is written
 UPDATED: Only process emails from today's date (ignores previous days)
 UPDATED: Emails REMAIN UNREAD in Gmail (no mark_as_read)
-UPDATED: Mark ALL employees as "Not Sent" at start of day processing
+UPDATED: Mark ALL employees as "Not Sent" at start of day processing (once per day)
 """
 
 import logging
@@ -42,10 +42,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 PROCESSED_EMAILS = set()
-_DATE_MARKED_NOT_SENT: Dict[str, bool] = {}
 
 
 class ReportProcessor:
+    # Class-level cache for Not Sent marking (shared across all instances)
+    _date_marked_not_sent: Dict[str, bool] = {}
+    
     def __init__(self):
         print("DEBUG: Initialising ReportProcessor", flush=True)
         logger.info("Initialising ReportProcessor...")
@@ -112,13 +114,13 @@ class ReportProcessor:
     def _mark_all_as_not_sent_for_date(self, dept: str, date_str: str) -> None:
         """Mark all employees as 'Not Sent' for this date (once per date per department)"""
         key = f"{dept}_{date_str}"
-        if key in _DATE_MARKED_NOT_SENT:
+        if key in ReportProcessor._date_marked_not_sent:
             return
         
         logger.info(f"📝 Marking all {dept} employees as 'Not Sent' for {date_str}")
         try:
             self.sheets.mark_all_as_not_sent(dept, date_str)
-            _DATE_MARKED_NOT_SENT[key] = True
+            ReportProcessor._date_marked_not_sent[key] = True
         except Exception as e:
             logger.error(f"Failed to mark 'Not Sent' for {dept} on {date_str}: {e}")
 
@@ -243,7 +245,6 @@ class ReportProcessor:
                     logger.info(f"📸 No screenshot found for {canonical_name} - skipping validation")
 
             # CRITICAL: Set status to empty string to clear "Not Sent" when data is written
-            # If there's a specific status (Valid, etc.), use it; otherwise clear the cell
             if report_status:
                 email_data["report_status"] = report_status
             elif screenshot_mismatch:
@@ -281,9 +282,10 @@ class ReportProcessor:
         self._write_buffer.clear()
 
     def run(self) -> List[Dict]:
-        global PROCESSED_EMAILS, _DATE_MARKED_NOT_SENT
+        global PROCESSED_EMAILS
         PROCESSED_EMAILS = set()
-        _DATE_MARKED_NOT_SENT = {}
+        # Reset the class-level cache at the start of each run
+        ReportProcessor._date_marked_not_sent = {}
         
         logger.info("=" * 60)
         logger.info("Report Processor started")
