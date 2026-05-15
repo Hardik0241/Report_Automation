@@ -6,7 +6,7 @@ NOW WITH: Sheet check before processing to prevent duplicate writes
 UPDATED: Screenshot validation is optional, email is source of truth
 UPDATED: NO "Quota Error" status saved to sheet - it's a system issue
 UPDATED: Duplicate emails SKIP silently — no DUPLICATE log entry
-UPDATED: Report Status column now always gets "Email Only" as default
+UPDATED: Report Status column now always gets cleared when data is written
 UPDATED: Only process emails from today's date (ignores previous days)
 UPDATED: Emails REMAIN UNREAD in Gmail (no mark_as_read)
 UPDATED: Mark ALL employees as "Not Sent" at start of day processing
@@ -242,12 +242,15 @@ class ReportProcessor:
                 else:
                     logger.info(f"📸 No screenshot found for {canonical_name} - skipping validation")
 
+            # CRITICAL: Set status to empty string to clear "Not Sent" when data is written
+            # If there's a specific status (Valid, etc.), use it; otherwise clear the cell
             if report_status:
                 email_data["report_status"] = report_status
             elif screenshot_mismatch:
                 email_data["report_status"] = "Email (screenshot mismatch)"
                 logger.info(f"📊 {canonical_name}: Email values written despite screenshot mismatch")
             else:
+                # Empty string will clear the "Not Sent" tag from the status column
                 email_data["report_status"] = ""
 
             self.sheets.ensure_date_for_all_employees(dept, date_str)
