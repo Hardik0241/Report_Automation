@@ -99,26 +99,19 @@ class SheetsService:
             del self._cache_timestamp[key]
 
     def _apply_formatting(self, ws: gspread.Worksheet, range_str: str = None) -> None:
-        """
-        Apply Calibri font size 13, dark black text, center alignment, and all borders
-        to the specified range or entire sheet if no range specified.
-        """
         try:
             if range_str is None:
-                # Get the actual used range
                 all_values = ws.get_all_values()
                 if not all_values:
                     return
                 max_row = len(all_values)
                 max_col = len(all_values[0]) if all_values else 10
-                # Limit to reasonable range to avoid API errors
                 max_row = min(max_row, 500)
                 max_col = min(max_col, 20)
                 range_str = f"A1:{gspread.utils.rowcol_to_a1(max_row, max_col)}"
             
             sheet_id = ws.id
             
-            # Parse the range safely
             start_row_num = 1
             end_row_num = 100
             start_col = "A"
@@ -127,7 +120,6 @@ class SheetsService:
             if ":" in range_str:
                 start_cell, end_cell = range_str.split(":")
                 
-                # Extract row numbers safely
                 start_row_match = re.search(r'(\d+)$', start_cell)
                 end_row_match = re.search(r'(\d+)$', end_cell)
                 
@@ -136,21 +128,17 @@ class SheetsService:
                 if end_row_match:
                     end_row_num = int(end_row_match.group(1))
                 
-                # VALIDATE: Ensure end_row_num >= start_row_num
                 if end_row_num < start_row_num:
                     logger.warning(f"Invalid range: endRow {end_row_num} < startRow {start_row_num}, swapping")
                     start_row_num, end_row_num = end_row_num, start_row_num
                 
-                # Limit to reasonable number of rows to avoid API errors
                 if end_row_num - start_row_num > 500:
                     end_row_num = start_row_num + 500
                     logger.info(f"Limited formatting range to {end_row_num - start_row_num} rows")
                 
-                # Get column letters
                 start_col = ''.join(filter(str.isalpha, start_cell)) or "A"
                 end_col = ''.join(filter(str.isalpha, end_cell)) or "Z"
             else:
-                # Single cell range
                 row_match = re.search(r'(\d+)$', range_str)
                 if row_match:
                     start_row_num = int(row_match.group(1))
@@ -167,7 +155,6 @@ class SheetsService:
             start_col_idx = col_to_index(start_col)
             end_col_idx = col_to_index(end_col)
             
-            # Build the formatting request
             requests = [{
                 "repeatCell": {
                     "range": {
@@ -197,318 +184,3 @@ class SheetsService:
                                 "right": {"style": "SOLID"}
                             }
                         }
-                    },
-                    "fields": "userEnteredFormat.textFormat,userEnteredFormat.horizontalAlignment,userEnteredFormat.verticalAlignment,userEnteredFormat.borders"
-                }
-            }]
-            
-            ws.spreadsheet.batch_update({"requests": requests})
-            logger.info(f"Applied formatting to {ws.title} - Range: {range_str}")
-            
-        except Exception as e:
-            logger.warning(f"Formatting failed for {ws.title}: {e}")
-
-    def ensure_status_column(self, department: str, date_str: str) -> None:
-        """Ensure 'Report Status' column exists in Sales sheet ONLY"""
-        if department != "Sales":
-            return
-        
-        ws = self._get_worksheet(department, date_str)
-        try:
-            headers = ws.row_values(1)
-            if "Report Status" not in headers:
-                last_col = len(headers) + 1
-                ws.update_cell(1, last_col, "Report Status")
-                # Apply formatting to the new header cell
-                self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, last_col)}:{gspread.utils.rowcol_to_a1(1, last_col)}")
-                logger.info(f"Added 'Report Status' column to {ws.title}")
-        except Exception as e:
-            logger.warning(f"Could not ensure status column: {e}")
-
-    def _get_worksheet(self, department: str, date_str: str) -> gspread.Worksheet:
-        key = (department, date_str)
-        if key in self._ws_cache:
-            return self._ws_cache[key]
-
-        ss = self._spreadsheet(department)
-        name = self.sheet_name(date_str)
-        try:
-            ws = ss.worksheet(name)
-        except gspread.WorksheetNotFound:
-            ws = self._create_worksheet(ss, name, department)
-
-        self._ws_cache[key] = ws
-        return ws
-
-    def _create_worksheet(self, ss: gspread.Spreadsheet, name: str, department: str) -> gspread.Worksheet:
-        """Create a new worksheet with headers and proper formatting"""
-        employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
-        headers = SALES_HEADERS if department == "Sales" else HR_HEADERS
-        ws = ss.add_worksheet(title=name, rows=str(len(employees) * 35 + 10), cols="20")
-        
-        # Write headers
-        ws.update("A1", [headers])
-        
-        # Write employee names in column B
-        ws.update(f"B2:B{len(employees) + 1}", [[emp] for emp in employees])
-        
-        # Apply formatting to the entire sheet
-        self._apply_formatting(ws)
-        
-        logger.info(f"Created sheet '{name}' for {department} with Calibri 13, center alignment, borders")
-        return ws
-
-    def mark_all_as_not_sent(self, department: str, date_str: str) -> None:
-        """Mark ALL employees as 'Not Sent' in the Report Status column at start of day"""
-        if department != "Sales":
-            return
-        
-        date_key = f"{department}_{date_str}"
-        if date_key in self._date_marked_not_sent:
-            return
-        
-        ws = self._get_worksheet(department, date_str)
-        
-        self.ensure_status_column(department, date_str)
-        
-        headers = ws.row_values(1)
-        status_col = None
-        for i, header in enumerate(headers, start=1):
-            if header == "Report Status":
-                status_col = i
-                break
-        
-        if status_col is None:
-            status_col = len(headers) + 1
-            ws.update_cell(1, status_col, "Report Status")
-            self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
-        
-        all_values = self._get_cached_worksheet_data(department, date_str)
-        
-        updates = []
-        ranges_to_format = []
-        for i, row in enumerate(all_values[1:], start=2):
-            row_date = row[0].strip() if len(row) > 0 else ""
-            if row_date == date_str:
-                col_letter = gspread.utils.rowcol_to_a1(i, status_col).rstrip("0123456789")
-                range_str = f"{col_letter}{i}"
-                updates.append({"range": range_str, "values": [["Not Sent"]]})
-                ranges_to_format.append(range_str)
-        
-        if updates:
-            for update in updates:
-                ws.update(update["range"], update["values"], value_input_option="USER_ENTERED")
-            for range_str in ranges_to_format:
-                self._apply_formatting(ws, range_str)
-            self._date_marked_not_sent.add(date_key)
-            self._invalidate_cache(department, date_str)
-            logger.info(f"Marked {len(updates)} employees as 'Not Sent' for {date_str}")
-
-    @with_retry()
-    def ensure_date_for_all_employees(self, department: str, date_str: str) -> None:
-        employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
-        ws = self._get_worksheet(department, date_str)
-        
-        all_values = self._get_cached_worksheet_data(department, date_str)
-        
-        has_date = set()
-        for row in all_values[1:]:
-            if row and row[0].strip() == date_str:
-                name = row[1].strip() if len(row) > 1 else ""
-                if name:
-                    has_date.add(name)
-        
-        updates = []
-        ranges_to_format = []
-        for emp in employees:
-            if emp not in has_date:
-                row_num = len(all_values) + 1 + len(updates)
-                range_str = f"A{row_num}:B{row_num}"
-                updates.append({"range": range_str, "values": [[date_str, emp]]})
-                ranges_to_format.append(range_str)
-        
-        if updates:
-            ws.batch_update(updates, value_input_option="USER_ENTERED")
-            for range_str in ranges_to_format:
-                self._apply_formatting(ws, range_str)
-            self._invalidate_cache(department, date_str)
-            logger.info(f"Added date for {len(updates)} employees in {department}")
-
-    @with_retry()
-    def find_employee_row(self, department: str, date_str: str, employee_name: str) -> Optional[int]:
-        all_values = self._get_cached_worksheet_data(department, date_str)
-        for i, row in enumerate(all_values[1:], start=2):
-            if row and row[0].strip() == date_str and row[1].strip().lower() == employee_name.lower():
-                return i
-        return None
-
-    @with_retry()
-    def write_batch(self, department: str, date_str: str, updates: List[Tuple[int, Dict]]) -> None:
-        """
-        Write data to Google Sheets with proper formatting.
-        Always applies Calibri 13, center alignment, and borders to written cells.
-        """
-        if not updates:
-            return
-        ws = self._get_worksheet(department, date_str)
-        mapping = SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
-        
-        # Find status column index
-        headers = ws.row_values(1)
-        status_col = None
-        for i, header in enumerate(headers, start=1):
-            if header == "Report Status":
-                status_col = i
-                break
-        
-        # If status column doesn't exist and this is Sales, create it
-        if status_col is None and department == "Sales":
-            status_col = len(headers) + 1
-            ws.update_cell(1, status_col, "Report Status")
-            self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
-        
-        batch_requests = []
-        ranges_to_format = []
-        
-        for row_number, data in updates:
-            cell_updates = {}
-            
-            # Add data columns
-            for field, col in mapping.items():
-                if field in ("Date", "Employee Name"):
-                    continue
-                if field == "Report Status":
-                    continue
-                val = data.get(field, 0 if field != "Duration" else "00:00:00")
-                cell_updates[col] = val
-            
-            # CRITICAL: Always update the status column to clear "Not Sent"
-            if status_col:
-                if data.get("report_status"):
-                    cell_updates[status_col] = data.get("report_status")
-                else:
-                    # Clear the "Not Sent" tag when data is written
-                    cell_updates[status_col] = ""
-            
-            if not cell_updates:
-                continue
-            
-            cols = sorted(cell_updates)
-            min_col, max_col = cols[0], cols[-1]
-            row_values = [cell_updates.get(c, "") for c in range(min_col, max_col + 1)]
-            col_start = gspread.utils.rowcol_to_a1(row_number, min_col).rstrip("0123456789")
-            col_end = gspread.utils.rowcol_to_a1(row_number, max_col).rstrip("0123456789")
-            range_str = f"{col_start}{row_number}:{col_end}{row_number}"
-            batch_requests.append({"range": range_str, "values": [row_values]})
-            ranges_to_format.append(range_str)
-        
-        if batch_requests:
-            # Write the data
-            ws.batch_update(batch_requests, value_input_option="USER_ENTERED")
-            
-            # Apply formatting to each written range (limit to reasonable size)
-            for range_str in ranges_to_format:
-                self._apply_formatting(ws, range_str)
-            
-            self._invalidate_cache(department, date_str)
-            logger.info(f"Batch wrote {len(batch_requests)} rows to {ws.title}")
-
-    @with_retry()
-    def mark_not_sent(self, department: str, date_str: str) -> None:
-        """Legacy method - kept for compatibility. Use mark_all_as_not_sent instead."""
-        if department != "Sales":
-            return
-        self.mark_all_as_not_sent(department, date_str)
-
-    @with_retry()
-    def mark_invalid_report(self, department: str, date_str: str, employee_name: str) -> None:
-        if department != "Sales":
-            return
-
-        ws = self._get_worksheet(department, date_str)
-        
-        headers = ws.row_values(1)
-        status_col = None
-        for i, header in enumerate(headers, start=1):
-            if header == "Report Status":
-                status_col = i
-                break
-        
-        if status_col is None:
-            status_col = len(headers) + 1
-            ws.update_cell(1, status_col, "Report Status")
-            self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
-        
-        all_values = self._get_cached_worksheet_data(department, date_str)
-        row_num = None
-
-        for i, row in enumerate(all_values[1:], start=2):
-            row_date = row[0].strip() if len(row) > 0 else ""
-            row_name = row[1].strip() if len(row) > 1 else ""
-            if row_date == date_str and row_name.lower() == employee_name.lower():
-                row_num = i
-                break
-
-        if not row_num:
-            logger.warning(f"Row not found for {employee_name} on {date_str}")
-            return
-
-        col_letter = gspread.utils.rowcol_to_a1(row_num, status_col).rstrip("0123456789")
-        range_str = f"{col_letter}{row_num}"
-        ws.update(range_str, [["Invalid"]], value_input_option="USER_ENTERED")
-        self._apply_formatting(ws, range_str)
-        self._invalidate_cache(department, date_str)
-        logger.info(f"Marked {employee_name} as 'Invalid' for {date_str}")
-
-    @with_retry()
-    def mark_quota_error(self, department: str, date_str: str, employee_name: str) -> None:
-        if department != "Sales":
-            return
-
-        ws = self._get_worksheet(department, date_str)
-        
-        headers = ws.row_values(1)
-        status_col = None
-        for i, header in enumerate(headers, start=1):
-            if header == "Report Status":
-                status_col = i
-                break
-        
-        if status_col is None:
-            status_col = len(headers) + 1
-            ws.update_cell(1, status_col, "Report Status")
-            self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
-        
-        all_values = self._get_cached_worksheet_data(department, date_str)
-        row_num = None
-
-        for i, row in enumerate(all_values[1:], start=2):
-            row_date = row[0].strip() if len(row) > 0 else ""
-            row_name = row[1].strip() if len(row) > 1 else ""
-            if row_date == date_str and row_name.lower() == employee_name.lower():
-                row_num = i
-                break
-
-        if not row_num:
-            logger.warning(f"Row not found for {employee_name} on {date_str}")
-            return
-
-        col_letter = gspread.utils.rowcol_to_a1(row_num, status_col).rstrip("0123456789")
-        range_str = f"{col_letter}{row_num}"
-        ws.update(range_str, [["Quota Error"]], value_input_option="USER_ENTERED")
-        self._apply_formatting(ws, range_str)
-        self._invalidate_cache(department, date_str)
-        logger.info(f"Marked {employee_name} as 'Quota Error' for {date_str}")
-
-    def list_sheets(self, department: str) -> List[str]:
-        return [ws.title for ws in self._spreadsheet(department).worksheets()]
-
-    def get_employees_for_date(self, department: str, date_str: str) -> Dict[str, int]:
-        all_values = self._get_cached_worksheet_data(department, date_str)
-        emp_rows = {}
-        for i, row in enumerate(all_values[1:], start=2):
-            row_date = row[0].strip() if len(row) > 0 else ""
-            row_name = row[1].strip() if len(row) > 1 else ""
-            if row_date == date_str and row_name:
-                emp_rows[row_name] = i
-        return emp_rows
