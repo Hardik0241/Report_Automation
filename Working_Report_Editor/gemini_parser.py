@@ -2,8 +2,9 @@
 gemini_parser.py — Parse email body into structured data using Gemini.
 UPDATED: Enhanced fallback for Sales duration parsing and "Leave" detection
 UPDATED: Fixed duration extraction for proper hour/minute/second capture
-UPDATED: Enhanced grab() function to handle "Connected: 38" format with colon
+UPDATED: Enhanced grab() function to handle "Total dial:- 168" format with colon-dash
 UPDATED: Added regex fallback to handle Gemini API quota errors gracefully
+UPDATED: Prioritize sender email over body keywords for department detection
 """
 
 import json
@@ -92,7 +93,6 @@ class GeminiParser:
             raw_text = response.text.strip()
             data = self._extract_json(raw_text)
         except Exception as exc:
-            # Log the error but continue with fallback (don't fail completely)
             if "429" in str(exc) or "quota" in str(exc).lower():
                 logger.warning(f"⚠️ Gemini API quota exceeded - using regex fallback parser")
             else:
@@ -148,6 +148,7 @@ class GeminiParser:
     def _detect_department(text: str, sender_email: str = "") -> str:
         t = text.lower()
         
+        # FIRST PRIORITY: Sender email mapping (MOST IMPORTANT!)
         if sender_email:
             sender_lower = sender_email.lower()
             for email in SALES_EMAIL_MAP.keys():
@@ -159,21 +160,12 @@ class GeminiParser:
                     logger.info(f"Department: HR (from sender email: {sender_email})")
                     return "HR"
         
+        # SECOND PRIORITY: Check for "Leave"
         if 'leave' in t:
             logger.info(f"Department: Sales (Leave detected)")
             return "Sales"
         
-        sales_keywords = [
-            "sales", "callyzer", "dialer", "prospect", "dialed", "dial", 
-            "outgoing", "total dialed", "total connected", "connected calls", 
-            "duration", "total dial", "total calls", "calls made",
-            "bde", "bde name", "bde -", "prospects"
-        ]
-        for kw in sales_keywords:
-            if kw in t:
-                logger.info(f"Department detected: Sales (body keyword: '{kw}')")
-                return "Sales"
-        
+        # THIRD PRIORITY: Body keywords (HR first, then Sales)
         hr_keywords = [
             "hr", "recruitment", "interview", "hiring", "lineup", 
             "candidate", "screening", "interview held", "tomorrow interview",
@@ -185,6 +177,18 @@ class GeminiParser:
             if kw in t:
                 logger.info(f"Department detected: HR (body keyword: '{kw}')")
                 return "HR"
+        
+        # Sales keywords (callyzer REMOVED to prevent HR misclassification)
+        sales_keywords = [
+            "sales", "dialer", "prospect", "dialed", "dial", 
+            "outgoing", "total dialed", "total connected", "connected calls", 
+            "duration", "total dial", "total calls", "calls made",
+            "bde", "bde name", "bde -", "prospects"
+        ]
+        for kw in sales_keywords:
+            if kw in t:
+                logger.info(f"Department detected: Sales (body keyword: '{kw}')")
+                return "Sales"
         
         logger.info("Department detection: Unknown (no keywords found)")
         return "Unknown"
@@ -208,21 +212,26 @@ class GeminiParser:
             for kw in keywords:
                 kw_esc = re.escape(kw)
                 patterns = [
-                    # Pattern for "Connected: 38" (colon with space)
+                    # Pattern for "Total dial:- 168" (colon and dash)
+                    rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+(?:\s*\+\s*\d+)*)",
+                    # Pattern for "Total dial: 168" (colon with space)
                     rf"(?i){kw_esc}[\s]*:[\s]*(\d+(?:\s*\+\s*\d+)*)",
-                    # Pattern for "Connected-38" (hyphen)
+                    # Pattern for "Total dial- 168" (dash)
                     rf"(?i){kw_esc}[\s]*-[\s]*(\d+(?:\s*\+\s*\d+)*)",
-                    # Pattern for "Connected 38" (space)
+                    # Pattern for "Total dial 168" (space)
                     rf"(?i){kw_esc}\s+(\d+(?:\s*\+\s*\d+)*)",
-                    # Pattern for "Connected:38" (no space after colon)
+                    # Pattern for "Total dial:168" (no space after colon)
                     rf"(?i){kw_esc}:(\d+(?:\s*\+\s*\d+)*)",
-                    # Pattern for "Total Dialed: 98"
-                    rf"(?i){kw_esc}[\s]*:[\s]*(\d+(?:\s*\+\s*\d+)*)",
+                    # Pattern for "Total dial-168" (no space after dash)
+                    rf"(?i){kw_esc}-(\d+(?:\s*\+\s*\d+)*)",
+                    # Pattern for "Total dial:-168" (colon dash no space)
+                    rf"(?i){kw_esc}:-(\d+(?:\s*\+\s*\d+)*)",
                 ]
                 for pattern in patterns:
                     match = re.search(pattern, text)
                     if match:
                         value_str = match.group(1)
+                        # Handle addition like "126+10", "34+2", "95+6"
                         if '+' in value_str:
                             parts = re.split(r'\s*\+\s*', value_str)
                             total = 0
@@ -242,15 +251,15 @@ class GeminiParser:
                 "department": "Sales",
                 "Total Dialed": grab([
                     "total dial", "total dials", "total dialed", "total calls", 
-                    "calls made", "dials", "dial", "total dial", "dial"
+                    "calls made", "dials", "dial"
                 ]),
                 "Total Connected": grab([
                     "total connected", "connected calls", "connected", 
-                    "conn", "connect", "total connected"
+                    "conn", "connect"
                 ]),
                 "Duration": dur,
                 "Prospect": grab([
-                    "prospect", "prospects", "pros", "prspct"
+                    "prospect", "prospects", "pros"
                 ]),
             }
 
@@ -259,8 +268,7 @@ class GeminiParser:
                 "employee_name": name,
                 "department": "HR",
                 "Total Calls": grab([
-                    "total dialed", "total dial", "total calls", "dialed",
-                    "calls", "dial"
+                    "total dialed", "total dial", "total calls", "dialed", "calls", "dial"
                 ]),
                 "Connected Calls": grab([
                     "connected", "connected calls", "total connected", "conn", "connect"
@@ -269,13 +277,11 @@ class GeminiParser:
                 "Tomorrow Interview Lineups": grab([
                     "tomorrow interview lineups", "interview lineups", 
                     "tomorrow lineups", "lineups", "total line ups for tomorrow",
-                    "total line ups", "line ups for tomorrow", "lineups for tomorrow",
-                    "line ups", "lineups", "total lineups", "line up for tomorrow",
-                    "total line up for tomorrow", "tomorrow line up"
+                    "total line ups", "line ups for tomorrow"
                 ]),
                 "Interview Held": grab([
                     "today held", "interview held", "interviews held", "held",
-                    "today interview held", "held-", "today held-", "today held interview"
+                    "today interview held", "held-"
                 ]),
             }
 
@@ -300,7 +306,7 @@ class GeminiParser:
             'everyone', 'all', 'daily', 'report', 'calling', 'kra',
             'subject', 'forwarded', 'attachment', 'see', 'below',
             'attached', 'please find', 'here is', 'today\'s', 'sales',
-            'hr', 'callyzer', 'dialer', 'total', 'connected', 'duration',
+            'hr', 'dialer', 'total', 'connected', 'duration',
             'kindly check', 'bde', 'prospect', 'kfb', 'dear sir', 'bde -',
             'calling', 'prospect', 'edujam', 'gmail', 'com'
         ]
@@ -349,10 +355,5 @@ class GeminiParser:
         if match:
             m = int(match.group(1))
             return f"00:{m:02d}:00"
-        
-        match = re.search(r'Duration[:\s-]+\s*(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
-        if match:
-            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
-            return f"{h:02d}:{m:02d}:{s:02d}"
         
         return "00:00:00"
