@@ -171,7 +171,6 @@ class ReportProcessor:
 
             date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
 
-            # Mark all employees as "Not Sent" for this date (first email of the day triggers this)
             self._mark_all_as_not_sent_for_date(dept, date_str)
 
             if not self._is_today_date(date_str):
@@ -244,14 +243,13 @@ class ReportProcessor:
                 else:
                     logger.info(f"📸 No screenshot found for {canonical_name} - skipping validation")
 
-            # CRITICAL: Set status to empty string to clear "Not Sent" when data is written
+            # Set empty string to clear "Not Sent" when data is written
             if report_status:
                 email_data["report_status"] = report_status
             elif screenshot_mismatch:
                 email_data["report_status"] = "Email (screenshot mismatch)"
                 logger.info(f"📊 {canonical_name}: Email values written despite screenshot mismatch")
             else:
-                # Empty string will clear the "Not Sent" tag from the status column
                 email_data["report_status"] = ""
 
             self.sheets.ensure_date_for_all_employees(dept, date_str)
@@ -284,7 +282,6 @@ class ReportProcessor:
     def run(self) -> List[Dict]:
         global PROCESSED_EMAILS
         PROCESSED_EMAILS = set()
-        # Reset the class-level cache at the start of each run
         ReportProcessor._date_marked_not_sent = {}
         
         logger.info("=" * 60)
