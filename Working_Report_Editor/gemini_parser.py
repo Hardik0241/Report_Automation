@@ -1,10 +1,9 @@
 """
 gemini_parser.py — Parse email body into structured data using Gemini.
-UPDATED: Enhanced fallback for Sales duration parsing and "Leave" detection
-UPDATED: Fixed duration extraction for proper hour/minute/second capture
-UPDATED: Enhanced grab() function to handle "Total dial:- 168" format with colon-dash
-UPDATED: Added regex fallback to handle Gemini API quota errors gracefully
-UPDATED: Prioritize sender email over body keywords for department detection
+UPDATED: Fixed HR regex for "Total Line up for Tomorrow" (singular, dash, colon)
+UPDATED: Fixed duration extraction for HH:MM:SS format with dash (Siddhesh's issue)
+UPDATED: Improved call number extraction precision
+UPDATED: Enhanced grab() function to handle time formats separately
 """
 
 import json
@@ -69,7 +68,7 @@ Rules:
 - Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
 - If the email contains "Leave" or "leave" anywhere, mark as "Leave" and skip.
-- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s"
+- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52"
 
 Email content:
 """
@@ -178,7 +177,7 @@ class GeminiParser:
                 logger.info(f"Department detected: HR (body keyword: '{kw}')")
                 return "HR"
         
-        # Sales keywords (callyzer REMOVED to prevent HR misclassification)
+        # Sales keywords
         sales_keywords = [
             "sales", "dialer", "prospect", "dialed", "dial", 
             "outgoing", "total dialed", "total connected", "connected calls", 
@@ -208,7 +207,8 @@ class GeminiParser:
         dur = self._extract_duration_flexible(text)
         name = self._extract_name(text)
 
-        def grab(keywords: list) -> int:
+        def grab_number(keywords: list) -> int:
+            """Extract integer numbers (for dialed, connected, prospect, lineups, held)"""
             for kw in keywords:
                 kw_esc = re.escape(kw)
                 patterns = [
@@ -245,44 +245,140 @@ class GeminiParser:
                             return int(nums[0])
             return 0
 
+        def grab_duration(keywords: list) -> str:
+            """Extract duration - handles both time format HH:MM:SS and text format"""
+            for kw in keywords:
+                kw_esc = re.escape(kw)
+                
+                # Pattern 1: HH:MM:SS format with dash (Duration- 01:28:52)
+                pattern_time = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}:\d{{2}}:\d{{2}})"
+                match = re.search(pattern_time, text)
+                if match:
+                    return match.group(1)
+                
+                # Pattern 2: HH:MM:SS format with colon (Duration: 01:28:52)
+                pattern_time_colon = rf"(?i){kw_esc}[\s]*:[\s]*(\d{{2}}:\d{{2}}:\d{{2}})"
+                match = re.search(pattern_time_colon, text)
+                if match:
+                    return match.group(1)
+                
+                # Pattern 3: Text format like "1h 30m 45s" - will be parsed by parse_duration
+                pattern_text = rf"(?i){kw_esc}[\s]*[:=-][\s]*([\d\s]+[hms]+[\d\s]+[hms]*[\d\s]*[hms]*)"
+                match = re.search(pattern_text, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # Pattern 4: Space separator for text format
+                pattern_text_space = rf"(?i){kw_esc}\s+([\d\s]+[hms]+[\d\s]+[hms]*[\d\s]*[hms]*)"
+                match = re.search(pattern_text_space, text)
+                if match:
+                    return match.group(1).strip()
+            
+            return "00:00:00"
+
         if dept == "Sales":
+            # Use grab_number for integer fields
+            total_dialed = grab_number([
+                "total dial", "total dials", "total dialed", "total calls", 
+                "calls made", "dials", "dial"
+            ])
+            total_connected = grab_number([
+                "total connected", "connected calls", "connected", 
+                "conn", "connect"
+            ])
+            prospect = grab_number([
+                "prospect", "prospects", "pros"
+            ])
+            
+            # Use grab_duration for duration field
+            duration = grab_duration([
+                "duration", "dur", "talk time", "time"
+            ])
+            
+            # If grab_duration returned a time string, parse it
+            if duration and duration != "00:00:00" and ':' not in duration:
+                duration = parse_duration(duration)
+            
             return {
                 "employee_name": name,
                 "department": "Sales",
-                "Total Dialed": grab([
-                    "total dial", "total dials", "total dialed", "total calls", 
-                    "calls made", "dials", "dial"
-                ]),
-                "Total Connected": grab([
-                    "total connected", "connected calls", "connected", 
-                    "conn", "connect"
-                ]),
-                "Duration": dur,
-                "Prospect": grab([
-                    "prospect", "prospects", "pros"
-                ]),
+                "Total Dialed": total_dialed,
+                "Total Connected": total_connected,
+                "Duration": duration,
+                "Prospect": prospect,
             }
 
         elif dept == "HR":
+            total_calls = grab_number([
+                "total dialed", "total dial", "total calls", "dialed", "calls", "dial"
+            ])
+            connected_calls = grab_number([
+                "connected", "connected calls", "total connected", "conn", "connect"
+            ])
+            
+            # HR duration extraction
+            duration = grab_duration([
+                "duration", "dur", "talk time", "time"
+            ])
+            if duration and duration != "00:00:00" and ':' not in duration:
+                duration = parse_duration(duration)
+            
+            # IMPROVED: HR Lineups extraction - handles "Total Line up for Tomorrow- 2"
+            lineups = 0
+            lineup_patterns = [
+                # Pattern for "Total Line up for Tomorrow- 2" (dash, capital letters)
+                r"(?i)total[\s]+line[\s]+up[\s]+for[\s]+tomorrow[\s]*[-:][\s]*(\d+)",
+                # Pattern for "Total Line up for Tomorrow: 2" (colon)
+                r"(?i)total[\s]+line[\s]+up[\s]+for[\s]+tomorrow[\s]*:[\s]*(\d+)",
+                # Pattern for "Total Line up for Tomorrow 2" (space)
+                r"(?i)total[\s]+line[\s]+up[\s]+for[\s]+tomorrow[\s]+(\d+)",
+                # Pattern for "Line up for Tomorrow- 2" (without Total)
+                r"(?i)line[\s]+up[\s]+for[\s]+tomorrow[\s]*[-:][\s]*(\d+)",
+                # Pattern for "Tomorrow Lineups: 2"
+                r"(?i)tomorrow[\s]+lineups[\s]*:[\s]*(\d+)",
+                # Pattern for "Total line ups for tomorrow: 2" (plural)
+                r"(?i)total[\s]+line[\s]+ups[\s]+for[\s]+tomorrow[\s]*:[\s]*(\d+)",
+                # Pattern for "lineups: 2"
+                r"(?i)lineups[\s]*:[\s]*(\d+)",
+            ]
+            for pattern in lineup_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    lineups = int(match.group(1))
+                    logger.info(f"HR Lineups extracted: {lineups} using pattern: {pattern}")
+                    break
+            
+            # IMPROVED: HR Interview Held extraction - handles "Today Held-1"
+            held = 0
+            held_patterns = [
+                # Pattern for "Today Held-1" (dash)
+                r"(?i)today[\s]+held[\s]*-[\s]*(\d+)",
+                # Pattern for "Today Held: 1" (colon)
+                r"(?i)today[\s]+held[\s]*:[\s]*(\d+)",
+                # Pattern for "Today Held 1" (space)
+                r"(?i)today[\s]+held[\s]+(\d+)",
+                # Pattern for "Interview Held: 1"
+                r"(?i)interview[\s]+held[\s]*:[\s]*(\d+)",
+                # Pattern for "Held-1" (dash)
+                r"(?i)held[\s]*-[\s]*(\d+)",
+                # Pattern for "Held: 1" (colon)
+                r"(?i)held[\s]*:[\s]*(\d+)",
+            ]
+            for pattern in held_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    held = int(match.group(1))
+                    logger.info(f"HR Held extracted: {held} using pattern: {pattern}")
+                    break
+            
             return {
                 "employee_name": name,
                 "department": "HR",
-                "Total Calls": grab([
-                    "total dialed", "total dial", "total calls", "dialed", "calls", "dial"
-                ]),
-                "Connected Calls": grab([
-                    "connected", "connected calls", "total connected", "conn", "connect"
-                ]),
-                "Duration": dur,
-                "Tomorrow Interview Lineups": grab([
-                    "tomorrow interview lineups", "interview lineups", 
-                    "tomorrow lineups", "lineups", "total line ups for tomorrow",
-                    "total line ups", "line ups for tomorrow"
-                ]),
-                "Interview Held": grab([
-                    "today held", "interview held", "interviews held", "held",
-                    "today interview held", "held-"
-                ]),
+                "Total Calls": total_calls,
+                "Connected Calls": connected_calls,
+                "Duration": duration,
+                "Tomorrow Interview Lineups": lineups,
+                "Interview Held": held,
             }
 
         return None
@@ -333,24 +429,34 @@ class GeminiParser:
 
     @staticmethod
     def _extract_duration_flexible(text: str) -> str:
+        """Extract duration from text with multiple format support"""
         if 'leave' in text.lower():
             return "00:00:00"
         
+        # Pattern 1: HH:MM:SS format
+        match = re.search(r'(\d{2}):(\d{2}):(\d{2})', text)
+        if match:
+            return match.group(0)
+        
+        # Pattern 2: Xh Ym Zs format
         match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
         if match:
             h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
         
+        # Pattern 3: Xh Ym format
         match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m', text, re.IGNORECASE)
         if match:
             h, m = int(match.group(1)), int(match.group(2))
             return f"{h:02d}:{m:02d}:00"
         
+        # Pattern 4: Ym Zs format
         match = re.search(r'(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
         if match:
             m, s = int(match.group(1)), int(match.group(2))
             return f"00:{m:02d}:{s:02d}"
         
+        # Pattern 5: Just minutes
         match = re.search(r'(\d+)\s*m', text, re.IGNORECASE)
         if match:
             m = int(match.group(1))
