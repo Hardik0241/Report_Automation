@@ -1,7 +1,8 @@
 """
 utils.py — Shared utility functions: date extraction, duration parsing, math handling
-COMPLETELY REWRITTEN: Fixed duration parsing for addition patterns like "+7 minutes", "+10 min"
-Handles: "1h 15m + 10 min", "1h 49m 16s + 12m", "Total dial:- 168"
+UPDATED: Fixed duration parsing for addition patterns like "+7 minutes", "+10 min"
+UPDATED: Added more robust duration extraction for HH:MM:SS format with dashes
+Handles: "1h 15m + 10 min", "1h 49m 16s + 12m", "Total dial:- 168", "Duration- 01:28:52"
 """
 
 import re
@@ -80,6 +81,8 @@ def parse_duration(raw: str) -> str:
     - "1h 49m 16s + 12m" → 02:01:16
     - "1h 15m + 10min" → 01:25:00
     - "1h 15m +10m" → 01:25:00
+    - "Duration- 01:28:52" → 01:28:52
+    - "01:28:52" → 01:28:52
     """
     if not raw:
         return "00:00:00"
@@ -88,6 +91,17 @@ def parse_duration(raw: str) -> str:
     
     if 'leave' in raw.lower():
         return "00:00:00"
+    
+    # Handle HH:MM:SS format directly (e.g., "01:28:52")
+    match = re.search(r'(\d{2}):(\d{2}):(\d{2})', raw)
+    if match:
+        return match.group(0)
+    
+    # Handle MM:SS format
+    match = re.search(r'(\d{2}):(\d{2})', raw)
+    if match and ':' in raw and raw.count(':') == 1:
+        m, s = int(match.group(1)), int(match.group(2))
+        return f"00:{m:02d}:{s:02d}"
     
     # Handle multiple durations with "+"
     if '+' in raw:
@@ -183,14 +197,14 @@ def _duration_to_seconds(duration_str: str) -> int:
         total_seconds += int(match.group(1))
         return total_seconds
     
-    # Pattern 8: "01:05:30" - HH:MM:SS format
+    # Pattern 8: "01:28:52" - HH:MM:SS format
     match = re.search(r'(\d{2}):(\d{2}):(\d{2})', duration_str)
     if match:
         h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
         total_seconds += h * 3600 + m * 60 + s
         return total_seconds
     
-    # Pattern 9: "01:05" - MM:SS format
+    # Pattern 9: "01:28" - MM:SS format
     match = re.search(r'(\d{2}):(\d{2})', duration_str)
     if match:
         m, s = int(match.group(1)), int(match.group(2))
