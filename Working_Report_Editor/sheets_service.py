@@ -5,6 +5,7 @@ Formatting: Dark black text (#000000), All borders on data cells
 UPDATED: Fixed write_batch() to properly clear "Not Sent" status when data is written
 UPDATED: Ensures Calibri font, size 13, center alignment, and all borders for every write operation
 UPDATED: Fixed row index validation to prevent 400 errors
+UPDATED: Fixed status column update to ensure "Not Sent" is cleared
 """
 
 import logging
@@ -238,6 +239,7 @@ class SheetsService:
         return ws
 
     def mark_all_as_not_sent(self, department: str, date_str: str) -> None:
+        """Mark all employees as 'Not Sent' ONLY if they have NO data in other columns"""
         if department != "Sales":
             return
         
@@ -265,13 +267,23 @@ class SheetsService:
         
         updates = []
         ranges_to_format = []
+        
         for i, row in enumerate(all_values[1:], start=2):
             row_date = row[0].strip() if len(row) > 0 else ""
             if row_date == date_str:
-                col_letter = gspread.utils.rowcol_to_a1(i, status_col).rstrip("0123456789")
-                range_str = f"{col_letter}{i}"
-                updates.append({"range": range_str, "values": [["Not Sent"]]})
-                ranges_to_format.append(range_str)
+                # Check if employee has ANY data in other columns
+                has_data = False
+                for col_idx, val in enumerate(row[2:], start=3):  # Skip Date (col1) and Name (col2)
+                    if val and val.strip() not in ["", "0", "00:00:00"]:
+                        has_data = True
+                        break
+                
+                # Only mark as "Not Sent" if NO data exists
+                if not has_data:
+                    col_letter = gspread.utils.rowcol_to_a1(i, status_col).rstrip("0123456789")
+                    range_str = f"{col_letter}{i}"
+                    updates.append({"range": range_str, "values": [["Not Sent"]]})
+                    ranges_to_format.append(range_str)
         
         if updates:
             for update in updates:
@@ -334,10 +346,12 @@ class SheetsService:
                 status_col = i
                 break
         
+        # Ensure status column exists for Sales
         if status_col is None and department == "Sales":
             status_col = len(headers) + 1
             ws.update_cell(1, status_col, "Report Status")
             self._apply_formatting(ws, f"{gspread.utils.rowcol_to_a1(1, status_col)}:{gspread.utils.rowcol_to_a1(1, status_col)}")
+            logger.info(f"Created Report Status column at column {status_col}")
         
         batch_requests = []
         ranges_to_format = []
@@ -355,11 +369,10 @@ class SheetsService:
             
             # CRITICAL FIX: Always update status column to clear "Not Sent"
             if status_col:
-                if data.get("report_status"):
-                    cell_updates[status_col] = data.get("report_status")
-                else:
-                    # Clear "Not Sent" when data is written
-                    cell_updates[status_col] = ""
+                # Get current status from data or default to empty string
+                report_status = data.get("report_status", "")
+                cell_updates[status_col] = report_status
+                logger.info(f"Setting status for row {row_number} to '{report_status}' (clearing Not Sent)")
             
             if not cell_updates:
                 continue
