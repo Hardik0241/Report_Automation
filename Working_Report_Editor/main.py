@@ -3,13 +3,10 @@ main.py — Production pipeline orchestrator
 Always writes email body values. Marks "Quota Error" when API fails.
 Duplicate check is FIRST to prevent re-processing same email.
 NOW WITH: Sheet check before processing to prevent duplicate writes
-UPDATED: Screenshot validation is optional, email is source of truth
-UPDATED: NO "Quota Error" status saved to sheet - it's a system issue
-UPDATED: Duplicate emails SKIP silently — no DUPLICATE log entry
+UPDATED: Screenshot validation compares Total Phone Calls with Total Dialed
+UPDATED: Only adds mismatch tag when values actually differ
 UPDATED: Report Status column now always gets cleared when data is written
 UPDATED: Only process emails from today's date (ignores previous days)
-UPDATED: Emails REMAIN UNREAD in Gmail (no mark_as_read)
-UPDATED: Mark ALL employees as "Not Sent" at start of day processing (once per day)
 """
 
 import logging
@@ -45,7 +42,6 @@ PROCESSED_EMAILS = set()
 
 
 class ReportProcessor:
-    # Class-level cache for Not Sent marking (shared across all instances)
     _date_marked_not_sent: Dict[str, bool] = {}
     
     def __init__(self):
@@ -86,16 +82,9 @@ class ReportProcessor:
                 if field not in ("Date", "Employee Name", "Report Status"):
                     if col - 1 < len(row_data) and row_data[col - 1].strip():
                         val = row_data[col - 1].strip()
-                        if val not in ["", "0", "00:00:00", "Not Sent", "Invalid", "Quota Error"]:
+                        if val not in ["", "0", "00:00:00", "Not Sent", "Invalid"]:
                             logger.info(f"Employee {employee_name} already has data in sheet for {date_str}: {field}={val}")
                             return True
-            
-            headers = ws.row_values(1)
-            for i, header in enumerate(headers, start=1):
-                if header == "Report Status":
-                    if i - 1 < len(row_data) and row_data[i - 1].strip() in ["Valid", "Invalid", "Quota Error"]:
-                        logger.info(f"Employee {employee_name} already has status {row_data[i - 1]} for {date_str}")
-                        return True
             
             return False
         except Exception as e:
@@ -112,7 +101,6 @@ class ReportProcessor:
             return False
 
     def _mark_all_as_not_sent_for_date(self, dept: str, date_str: str) -> None:
-        """Mark all employees as 'Not Sent' for this date (once per date per department)"""
         key = f"{dept}_{date_str}"
         if key in ReportProcessor._date_marked_not_sent:
             return
@@ -195,7 +183,7 @@ class ReportProcessor:
             if not ok:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
-            report_status = None
+            report_status = ""
             screenshot_mismatch = False
 
             if dept == "Sales" and attachments:
@@ -214,10 +202,12 @@ class ReportProcessor:
                         logger.warning(f"⚠️ Error parsing screenshot: {e}")
 
                 if screenshot_data:
+                    # Compare email values with screenshot values
                     email_calls = email_data.get("Total Dialed", 0)
                     email_connected = email_data.get("Total Connected", 0)
                     email_duration = email_data.get("Duration", "00:00:00")
 
+                    # Screenshot uses different field names
                     screen_calls = screenshot_data.get("Total Phone Calls", 0)
                     screen_connected = screenshot_data.get("Connected Calls", 0)
                     screen_duration = screenshot_data.get("Total Phone Calls Duration", "00:00:00")
@@ -225,30 +215,23 @@ class ReportProcessor:
                     logger.info(f"📧 Email values for {canonical_name}: Calls={email_calls}, Connected={email_connected}, Duration={email_duration}")
                     logger.info(f"📸 Screenshot values for {canonical_name}: Calls={screen_calls}, Connected={screen_connected}, Duration={screen_duration}")
 
-                    if email_calls > 0 or email_connected > 0 or email_duration != "00:00:00":
-                        if (email_calls != screen_calls or 
-                            email_connected != screen_connected or 
-                            email_duration != screen_duration):
-                            screenshot_mismatch = True
-                            logger.warning(f"⚠️ Screenshot mismatch for {canonical_name} - but email values will still be written")
-                        else:
-                            report_status = "Valid"
-                            logger.info(f"✅ Screenshot verified for {canonical_name}")
+                    # Check if values match
+                    if (email_calls == screen_calls and 
+                        email_connected == screen_connected and 
+                        email_duration == screen_duration):
+                        report_status = "Valid"
+                        logger.info(f"✅ Screenshot verified for {canonical_name} - values match!")
                     else:
-                        logger.info(f"📸 Email values were zero, using screenshot values for {canonical_name}")
-                        email_data["Total Dialed"] = screen_calls
-                        email_data["Total Connected"] = screen_connected
-                        email_data["Duration"] = screen_duration
-                        report_status = "Valid (from screenshot)"
+                        screenshot_mismatch = True
+                        logger.warning(f"⚠️ Screenshot mismatch for {canonical_name} - email values will still be written")
+                        report_status = "Email (screenshot mismatch)"
                 else:
                     logger.info(f"📸 No screenshot found for {canonical_name} - skipping validation")
+                    report_status = "No Screenshot"
 
-            # Set empty string to clear "Not Sent" when data is written
+            # Set report status
             if report_status:
                 email_data["report_status"] = report_status
-            elif screenshot_mismatch:
-                email_data["report_status"] = "Email (screenshot mismatch)"
-                logger.info(f"📊 {canonical_name}: Email values written despite screenshot mismatch")
             else:
                 email_data["report_status"] = ""
 
