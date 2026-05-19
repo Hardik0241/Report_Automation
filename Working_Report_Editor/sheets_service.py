@@ -3,8 +3,6 @@ sheets_service.py — Google Sheets operations with Calibri font, size 13, cente
 Handles: Not Sent, Invalid Report, Quota Error, actual data
 Formatting: Dark black text (#000000), All borders on data cells
 UPDATED: Fixed write_batch() to properly clear "Not Sent" status when data is written
-UPDATED: Ensures Calibri font, size 13, center alignment, and all borders for every write operation
-UPDATED: Fixed row index validation to prevent 400 errors
 UPDATED: Fixed status column update to ensure "Not Sent" is cleared
 """
 
