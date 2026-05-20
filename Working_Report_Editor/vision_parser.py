@@ -3,7 +3,8 @@ vision_parser.py — Parse Callyzer report screenshot correctly
 Reads: Total Phone Calls, Connected Calls, and Total Phone Calls Duration
 UPDATED: Changed from "Outgoing Calls" to "Total Phone Calls" section
 UPDATED: Added delay between API calls to respect quota
-UPDATED: Improved OCR fallback to read Total Phone Calls section
+UPDATED: Added detection for suspicious default responses (quota issue)
+UPDATED: Returns None for suspicious defaults so mismatch tag isn't added
 """
 
 import json
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# UPDATED PROMPT - Read from "Total Phone Calls" section (matches employee's "Total Dialed")
+# UPDATED PROMPT - Read from "Total Phone Calls" section
 _VISION_PROMPT = """
 You are analyzing a Callyzer report screenshot. Extract data from the "Total Phone Calls" section.
 
@@ -35,11 +36,6 @@ IMPORTANT: Look for these EXACT sections:
 1. "Total Phone Calls" - The number next to or below this is TOTAL DIALED
 2. Next to the stopwatch icon 🕐 or below "Total Phone Calls", find the DURATION (e.g., "1h 33m 33s")
 3. "Connected Calls" - The number next to or below this is CONNECTED CALLS
-
-For the example screenshot:
-- Total Phone Calls = 110
-- Total Phone Calls Duration = "1h 33m 33s" → convert to "01:33:33"
-- Connected Calls = 55
 
 Return ONLY valid JSON:
 {
@@ -52,21 +48,28 @@ RULES:
 - Duration format: "1h 33m 33s" → "01:33:33"
 - Duration format: "28m 10s" → "00:28:10"
 - Duration format: "1h 45m" → "01:45:00"
+- Duration format: "02.07.36" → "02:07:36"
 - Use 0 if you cannot find a number
 - Use "00:00:00" if you cannot find duration
 
 DO NOT read from "Outgoing Calls", "Incoming Calls", or "Missed Calls" sections.
 """
 
+# Suspicious default values that indicate Gemini quota/caching issue
+SUSPICIOUS_DEFAULTS = [
+    {"calls": 110, "connected": 55, "duration": "01:33:33"},  # Common default
+    {"calls": 100, "connected": 27, "duration": "00:28:10"},  # Previous default
+    {"calls": 92, "connected": 92, "duration": "00:28:10"},   # Another default
+]
+
 
 class VisionParser:
     def __init__(self):
         self.model = genai.GenerativeModel(GEMINI_MODEL)
         self._last_api_call_time = 0
-        self._min_delay_seconds = 15  # Delay between Vision API calls to respect quota
+        self._min_delay_seconds = 15
 
     def _wait_for_quota(self):
-        """Wait to avoid hitting rate limits"""
         now = time.time()
         elapsed = now - self._last_api_call_time
         if elapsed < self._min_delay_seconds:
@@ -74,6 +77,20 @@ class VisionParser:
             logger.info(f"Waiting {wait_time:.1f}s to respect Vision API quota...")
             time.sleep(wait_time)
         self._last_api_call_time = time.time()
+
+    def _is_suspicious_default(self, data: Dict) -> bool:
+        """Check if the parsed data matches known suspicious default patterns (quota issue)"""
+        calls = data.get("Total Phone Calls", 0)
+        connected = data.get("Connected Calls", 0)
+        duration = data.get("Total Phone Calls Duration", "")
+        
+        for default in SUSPICIOUS_DEFAULTS:
+            if (calls == default["calls"] and 
+                connected == default["connected"] and 
+                duration == default["duration"]):
+                logger.warning(f"⚠️ Detected suspicious default values (calls={calls}, connected={connected}, duration={duration}) - likely quota/caching issue")
+                return True
+        return False
 
     @with_retry()
     def parse_screenshot(self, image_path: str) -> Optional[Dict]:
@@ -89,12 +106,11 @@ class VisionParser:
             w, h = img.size
             logger.info(f"Original image size: {w}x{h}")
             
-            # Focus on the Total Phone Calls section (typically 0-50% of image)
+            # Focus on the Total Phone Calls section
             crop_bottom = int(h * 0.50)
             img = img.crop((0, 0, w, crop_bottom))
             logger.info(f"Cropped to Total Phone Calls section: {img.size}")
 
-            # Upscale for better readability
             if w < 1000:
                 scale = 1000 / w
                 new_size = (int(w * scale), int(img.height * scale))
@@ -107,9 +123,7 @@ class VisionParser:
                 temp_path = tmp.name
 
             try:
-                # Wait for quota before API call
                 self._wait_for_quota()
-                
                 logger.info("Calling Gemini Vision API (focused on Total Phone Calls)...")
                 response = self.model.generate_content([_VISION_PROMPT, temp_path])
                 raw_text = response.text.strip()
@@ -122,10 +136,16 @@ class VisionParser:
                     pass
 
             if data is None:
-                logger.warning("Could not parse JSON, using fallback OCR focused on Total Phone Calls")
+                logger.warning("Could not parse JSON, using fallback OCR")
                 return self._fallback_extraction(img)
 
             cleaned_data = self._clean(data)
+            
+            # Check for suspicious default values (quota issue)
+            if self._is_suspicious_default(cleaned_data):
+                logger.warning("Suspicious default detected - returning None to prevent false mismatch")
+                return None
+            
             return cleaned_data
 
         except Exception as exc:
@@ -144,7 +164,6 @@ class VisionParser:
             logger.info(f"OCR extracted text: {text[:500]}")
             
             # Look for Total Phone Calls section
-            # Pattern: "Total Phone Calls" followed by number and duration
             total_match = re.search(r'Total\s+Phone\s+Calls[^\d]*(\d+)[^\d]*([\d\s]+[hms]+[\d\s]+[hms]*)', text, re.IGNORECASE | re.DOTALL)
             
             total_calls = 0
@@ -155,19 +174,16 @@ class VisionParser:
                 duration_text = total_match.group(2)
                 
                 # Parse duration from text
-                # Pattern for "1h 33m 33s"
                 duration_match = re.search(r'(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*s', duration_text, re.IGNORECASE)
                 if duration_match:
                     h, m, s = int(duration_match.group(1)), int(duration_match.group(2)), int(duration_match.group(3))
                     duration = f"{h:02d}:{m:02d}:{s:02d}"
                 else:
-                    # Pattern for "33m 33s"
                     duration_match = re.search(r'(\d+)\s*m\s*(\d+)\s*s', duration_text, re.IGNORECASE)
                     if duration_match:
                         m, s = int(duration_match.group(1)), int(duration_match.group(2))
                         duration = f"00:{m:02d}:{s:02d}"
                     else:
-                        # Pattern for just minutes "33m"
                         duration_match = re.search(r'(\d+)\s*m', duration_text, re.IGNORECASE)
                         if duration_match:
                             m = int(duration_match.group(1))
@@ -176,6 +192,11 @@ class VisionParser:
             # Extract Connected Calls
             connected_match = re.search(r'Connected\s+Calls[^\d]*(\d+)', text, re.IGNORECASE)
             connected = int(connected_match.group(1)) if connected_match else 0
+            
+            # Check if OCR also returned suspicious values
+            if total_calls == 110 and connected == 55 and duration == "01:33:33":
+                logger.warning("OCR also returned suspicious default values - returning None")
+                return None
             
             logger.info(f"OCR fallback: TotalCalls={total_calls}, Connected={connected}, Duration={duration}")
             
@@ -221,6 +242,12 @@ class VisionParser:
         if not duration_str or duration_str == "00:00:00":
             return "00:00:00"
 
+        # Handle HH.MM.SS format (dots)
+        match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', duration_str)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
+
         # Handle "1h 33m 33s" format
         match = re.search(r'(\d+)h\s*(\d+)m\s*(\d+)s', duration_str, re.IGNORECASE)
         if match:
@@ -233,7 +260,7 @@ class VisionParser:
             m, s = int(match.group(1)), int(match.group(2))
             return f"00:{m:02d}:{s:02d}"
 
-        # Handle "1h 33m" format (no seconds)
+        # Handle "1h 33m" format
         match = re.search(r'(\d+)h\s*(\d+)m', duration_str, re.IGNORECASE)
         if match:
             h, m = int(match.group(1)), int(match.group(2))
@@ -245,7 +272,7 @@ class VisionParser:
             m = int(match.group(1))
             return f"00:{m:02d}:00"
 
-        # Handle existing HH:MM:SS
+        # Handle HH:MM:SS format
         match = re.search(r'(\d{2}):(\d{2}):(\d{2})', duration_str)
         if match:
             return duration_str
