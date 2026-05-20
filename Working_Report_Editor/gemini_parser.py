@@ -1,7 +1,7 @@
 """
 gemini_parser.py — Parse email body into structured data using Gemini.
 UPDATED: Fixed HR regex for "Total Line ups for tomorrow" (plural, dash, colon)
-UPDATED: Fixed duration extraction for HH:MM:SS format with dash
+UPDATED: Fixed duration extraction for HH:MM:SS format with dash and dots
 UPDATED: Improved call number extraction precision
 """
 
@@ -67,7 +67,7 @@ Rules:
 - Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
 - If the email contains "Leave" or "leave" anywhere, mark as "Leave" and skip.
-- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52"
+- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36"
 
 Email content:
 """
@@ -146,7 +146,6 @@ class GeminiParser:
     def _detect_department(text: str, sender_email: str = "") -> str:
         t = text.lower()
         
-        # FIRST PRIORITY: Sender email mapping (MOST IMPORTANT!)
         if sender_email:
             sender_lower = sender_email.lower()
             for email in SALES_EMAIL_MAP.keys():
@@ -158,12 +157,10 @@ class GeminiParser:
                     logger.info(f"Department: HR (from sender email: {sender_email})")
                     return "HR"
         
-        # SECOND PRIORITY: Check for "Leave"
         if 'leave' in t:
             logger.info(f"Department: Sales (Leave detected)")
             return "Sales"
         
-        # THIRD PRIORITY: Body keywords (HR first, then Sales)
         hr_keywords = [
             "hr", "recruitment", "interview", "hiring", "lineup", 
             "candidate", "screening", "interview held", "tomorrow interview",
@@ -176,7 +173,6 @@ class GeminiParser:
                 logger.info(f"Department detected: HR (body keyword: '{kw}')")
                 return "HR"
         
-        # Sales keywords
         sales_keywords = [
             "sales", "dialer", "prospect", "dialed", "dial", 
             "outgoing", "total dialed", "total connected", "connected calls", 
@@ -207,7 +203,6 @@ class GeminiParser:
         name = self._extract_name(text)
 
         def grab_number(keywords: list) -> int:
-            """Extract integer numbers (for dialed, connected, prospect, lineups, held)"""
             for kw in keywords:
                 kw_esc = re.escape(kw)
                 patterns = [
@@ -237,29 +232,32 @@ class GeminiParser:
             return 0
 
         def grab_duration(keywords: list) -> str:
-            """Extract duration - handles both time format HH:MM:SS and text format"""
             for kw in keywords:
                 kw_esc = re.escape(kw)
                 
-                # Pattern 1: HH:MM:SS format with dash
+                # Pattern for HH:MM:SS with colons
                 pattern_time = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}:\d{{2}}:\d{{2}})"
                 match = re.search(pattern_time, text)
                 if match:
                     return match.group(1)
                 
-                # Pattern 2: HH:MM:SS format with colon
+                # Pattern for HH.MM.SS with dots (Jayesh's format)
+                pattern_dots = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}\.\d{{2}}\.\d{{2}})"
+                match = re.search(pattern_dots, text)
+                if match:
+                    # Convert dots to colons
+                    return match.group(1).replace('.', ':')
+                
                 pattern_time_colon = rf"(?i){kw_esc}[\s]*:[\s]*(\d{{2}}:\d{{2}}:\d{{2}})"
                 match = re.search(pattern_time_colon, text)
                 if match:
                     return match.group(1)
                 
-                # Pattern 3: Text format
                 pattern_text = rf"(?i){kw_esc}[\s]*[:=-][\s]*([\d\s]+[hms]+[\d\s]+[hms]*[\d\s]*[hms]*)"
                 match = re.search(pattern_text, text)
                 if match:
                     return match.group(1).strip()
                 
-                # Pattern 4: Space separator
                 pattern_text_space = rf"(?i){kw_esc}\s+([\d\s]+[hms]+[\d\s]+[hms]*[\d\s]*[hms]*)"
                 match = re.search(pattern_text_space, text)
                 if match:
@@ -283,7 +281,7 @@ class GeminiParser:
             duration = grab_duration([
                 "duration", "dur", "talk time", "time"
             ])
-            if duration and duration != "00:00:00" and ':' not in duration:
+            if duration and duration != "00:00:00" and ':' not in duration and '.' not in duration:
                 duration = parse_duration(duration)
             
             return {
@@ -306,23 +304,18 @@ class GeminiParser:
             duration = grab_duration([
                 "duration", "dur", "talk time", "time"
             ])
-            if duration and duration != "00:00:00" and ':' not in duration:
+            if duration and duration != "00:00:00" and ':' not in duration and '.' not in duration:
                 duration = parse_duration(duration)
             
-            # UPDATED: HR Lineups extraction - handles multiple formats
+            # UPDATED: HR Lineups extraction with more flexible patterns
             lineups = 0
             lineup_patterns = [
-                # "Total Line ups for tomorrow- 3" (dash, space, plural)
                 r"(?i)total[\s]+line[\s]+ups?[\s]+for[\s]+tomorrow[\s]*[-:][\s]*(\d+)",
-                # "Total Line ups for tomorrow: 3" (colon)
                 r"(?i)total[\s]+line[\s]+ups?[\s]+for[\s]+tomorrow[\s]*:[\s]*(\d+)",
-                # "Total Line ups for tomorrow 3" (space)
                 r"(?i)total[\s]+line[\s]+ups?[\s]+for[\s]+tomorrow[\s]+(\d+)",
-                # "Line ups for tomorrow- 3" (without Total)
                 r"(?i)line[\s]+ups?[\s]+for[\s]+tomorrow[\s]*[-:][\s]*(\d+)",
-                # "Total line ups for tomorrow: 3" (lowercase)
-                r"(?i)total[\s]+line[\s]+ups[\s]+for[\s]+tomorrow[\s]*:[\s]*(\d+)",
-                # "lineups: 3"
+                r"(?i)total[\s]+line[\s]+ups?[\s]+for[\s]+tomorrow-[\s]*(\d+)",
+                r"(?i)total line ups? for tomorrow[\s]*[-:]?\s*(\d+)",
                 r"(?i)lineups?[\s]*:[\s]*(\d+)",
             ]
             for pattern in lineup_patterns:
@@ -342,6 +335,7 @@ class GeminiParser:
                 r"(?i)interview[\s]+held[\s]*:[\s]*(\d+)",
                 r"(?i)held[\s]*-[\s]*(\d+)",
                 r"(?i)held[\s]*:[\s]*(\d+)",
+                r"(?i)held-[\s]*(\d+)",
             ]
             for pattern in held_patterns:
                 match = re.search(pattern, text)
@@ -411,9 +405,16 @@ class GeminiParser:
         if 'leave' in text.lower():
             return "00:00:00"
         
+        # HH:MM:SS with colons
         match = re.search(r'(\d{2}):(\d{2}):(\d{2})', text)
         if match:
             return match.group(0)
+        
+        # HH.MM.SS with dots
+        match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', text)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
         
         match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
         if match:
