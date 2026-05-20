@@ -1,5 +1,6 @@
 """
 utils.py — Shared utility functions: date extraction, duration parsing, math handling
+UPDATED: Added support for dot-separated duration format (HH.MM.SS)
 UPDATED: Fixed duration parsing for addition patterns like "+7 minutes", "+10 min"
 UPDATED: Added more robust duration extraction for HH:MM:SS format with dashes
 """
@@ -72,6 +73,7 @@ def parse_duration(raw: str) -> str:
     - "1h 49m 16s + 12m" → 02:01:16
     - "Duration- 01:28:52" → 01:28:52
     - "01:28:52" → 01:28:52
+    - "02.07.36" → 02:07:36 (dot separator)
     """
     if not raw:
         return "00:00:00"
@@ -81,10 +83,16 @@ def parse_duration(raw: str) -> str:
     if 'leave' in raw.lower():
         return "00:00:00"
     
-    # Handle HH:MM:SS format directly
+    # Handle HH:MM:SS format with colons
     match = re.search(r'(\d{2}):(\d{2}):(\d{2})', raw)
     if match:
         return match.group(0)
+    
+    # Handle HH.MM.SS format with dots (Jayesh's format)
+    match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', raw)
+    if match:
+        h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        return f"{h:02d}:{m:02d}:{s:02d}"
     
     # Handle MM:SS format
     match = re.search(r'(\d{2}):(\d{2})', raw)
@@ -129,7 +137,14 @@ def _duration_to_seconds(duration_str: str) -> int:
         total_seconds += extra_seconds
         duration_str = re.sub(r'\+\s*\d+\s*s', '', duration_str, flags=re.IGNORECASE)
     
-    # Parse main duration
+    # Handle HH.MM.SS format with dots
+    match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', duration_str)
+    if match:
+        h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        total_seconds += h * 3600 + m * 60 + s
+        return total_seconds
+    
+    # Parse main duration - text formats
     match = re.search(r'(\d+)\s*h(?:r)?s?\s*(\d+)\s*m(?:in)?s?\s*(\d+)\s*s(?:ec)?s?', duration_str, re.IGNORECASE)
     if match:
         h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
@@ -169,12 +184,14 @@ def _duration_to_seconds(duration_str: str) -> int:
         total_seconds += int(match.group(1))
         return total_seconds
     
+    # Handle HH:MM:SS format with colons
     match = re.search(r'(\d{2}):(\d{2}):(\d{2})', duration_str)
     if match:
         h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
         total_seconds += h * 3600 + m * 60 + s
         return total_seconds
     
+    # Handle MM:SS format
     match = re.search(r'(\d{2}):(\d{2})', duration_str)
     if match:
         m, s = int(match.group(1)), int(match.group(2))
