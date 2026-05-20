@@ -3,7 +3,6 @@ sheets_service.py — Google Sheets operations with Calibri font, size 13, cente
 Handles: Not Sent, Invalid Report, Quota Error, actual data
 Formatting: Dark black text (#000000), All borders on data cells
 UPDATED: Fixed write_batch() to properly clear "Not Sent" status when data is written
-UPDATED: Fixed status column update to ensure "Not Sent" is cleared
 """
 
 import logging
@@ -237,7 +236,6 @@ class SheetsService:
         return ws
 
     def mark_all_as_not_sent(self, department: str, date_str: str) -> None:
-        """Mark all employees as 'Not Sent' ONLY if they have NO data in other columns"""
         if department != "Sales":
             return
         
@@ -269,14 +267,12 @@ class SheetsService:
         for i, row in enumerate(all_values[1:], start=2):
             row_date = row[0].strip() if len(row) > 0 else ""
             if row_date == date_str:
-                # Check if employee has ANY data in other columns
                 has_data = False
-                for col_idx, val in enumerate(row[2:], start=3):  # Skip Date (col1) and Name (col2)
+                for col_idx, val in enumerate(row[2:], start=3):
                     if val and val.strip() not in ["", "0", "00:00:00"]:
                         has_data = True
                         break
                 
-                # Only mark as "Not Sent" if NO data exists
                 if not has_data:
                     col_letter = gspread.utils.rowcol_to_a1(i, status_col).rstrip("0123456789")
                     range_str = f"{col_letter}{i}"
@@ -344,7 +340,6 @@ class SheetsService:
                 status_col = i
                 break
         
-        # Ensure status column exists for Sales
         if status_col is None and department == "Sales":
             status_col = len(headers) + 1
             ws.update_cell(1, status_col, "Report Status")
@@ -365,12 +360,10 @@ class SheetsService:
                 val = data.get(field, 0 if field != "Duration" else "00:00:00")
                 cell_updates[col] = val
             
-            # CRITICAL FIX: Always update status column to clear "Not Sent"
             if status_col:
-                # Get current status from data or default to empty string
                 report_status = data.get("report_status", "")
                 cell_updates[status_col] = report_status
-                logger.info(f"Setting status for row {row_number} to '{report_status}' (clearing Not Sent)")
+                logger.info(f"Setting status for row {row_number} to '{report_status}'")
             
             if not cell_updates:
                 continue
