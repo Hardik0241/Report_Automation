@@ -3,10 +3,9 @@ main.py — Production pipeline orchestrator
 Always writes email body values. Marks "Quota Error" when API fails.
 Duplicate check is FIRST to prevent re-processing same email.
 NOW WITH: Sheet check before processing to prevent duplicate writes
-UPDATED: Screenshot validation compares Total Phone Calls with Total Dialed
-UPDATED: Only adds mismatch tag when values actually differ
-UPDATED: Report Status column now always gets cleared when data is written
-UPDATED: Only process emails from today's date (ignores previous days)
+UPDATED: Screenshot validation handles quota errors gracefully
+UPDATED: Changed status messages to be system-friendly, not employee-blaming
+UPDATED: Added suspicious default detection for Gemini quota issues
 """
 
 import logging
@@ -184,30 +183,33 @@ class ReportProcessor:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
             report_status = ""
-            screenshot_mismatch = False
+            screenshot_parsed = False
 
             if dept == "Sales" and attachments:
                 screenshot_data = None
+                quota_error = False
+                
                 try:
                     for att in attachments:
                         if any(att.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg']):
                             screenshot_data = self.vision.parse_screenshot(att)
                             if screenshot_data:
                                 logger.info(f"📸 Screenshot parsed for {canonical_name}: {screenshot_data}")
+                                screenshot_parsed = True
                                 break
                 except Exception as e:
                     if "429" in str(e) or "quota" in str(e).lower():
-                        logger.warning(f"⚠️ Quota error during screenshot parsing for {canonical_name} - continuing with email values only")
+                        quota_error = True
+                        logger.warning(f"⚠️ Quota error during screenshot parsing for {canonical_name}")
                     else:
                         logger.warning(f"⚠️ Error parsing screenshot: {e}")
 
-                if screenshot_data:
+                if screenshot_data and screenshot_parsed:
                     # Compare email values with screenshot values
                     email_calls = email_data.get("Total Dialed", 0)
                     email_connected = email_data.get("Total Connected", 0)
                     email_duration = email_data.get("Duration", "00:00:00")
 
-                    # Screenshot uses different field names
                     screen_calls = screenshot_data.get("Total Phone Calls", 0)
                     screen_connected = screenshot_data.get("Connected Calls", 0)
                     screen_duration = screenshot_data.get("Total Phone Calls Duration", "00:00:00")
@@ -222,12 +224,24 @@ class ReportProcessor:
                         report_status = "Valid"
                         logger.info(f"✅ Screenshot verified for {canonical_name} - values match!")
                     else:
-                        screenshot_mismatch = True
-                        logger.warning(f"⚠️ Screenshot mismatch for {canonical_name} - email values will still be written")
-                        report_status = "Email (screenshot mismatch)"
+                        # This is a real mismatch (employee error)
+                        report_status = "Data Mismatch - Please verify"
+                        logger.warning(f"⚠️ Real data mismatch for {canonical_name}")
+                
+                elif quota_error:
+                    # Quota issue - don't blame employee
+                    report_status = "Screenshot unavailable (System Quota)"
+                    logger.info(f"📸 Quota issue for {canonical_name} - not verifying screenshot")
+                
+                elif not screenshot_parsed and attachments:
+                    # Screenshot existed but couldn't be parsed
+                    report_status = "Screenshot could not be read"
+                    logger.info(f"📸 Screenshot existed but parsing failed for {canonical_name}")
+                
                 else:
-                    logger.info(f"📸 No screenshot found for {canonical_name} - skipping validation")
-                    report_status = "No Screenshot"
+                    # No screenshot attached
+                    report_status = "No screenshot attached"
+                    logger.info(f"📸 No screenshot found for {canonical_name}")
 
             # Set report status
             if report_status:
