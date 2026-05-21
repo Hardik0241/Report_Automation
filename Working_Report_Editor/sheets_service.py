@@ -1,6 +1,6 @@
 """
 sheets_service.py — Google Sheets operations with Calibri font, size 13, center alignment
-Handles: Not Sent, Invalid Report, Quota Error, actual data
+Handles: Not Sent, actual data
 Formatting: Dark black text (#000000), All borders on data cells
 UPDATED: Fixed write_batch() to properly clear "Not Sent" status when data is written
 """
@@ -363,7 +363,6 @@ class SheetsService:
             if status_col:
                 report_status = data.get("report_status", "")
                 cell_updates[status_col] = report_status
-                logger.info(f"Setting status for row {row_number} to '{report_status}'")
             
             if not cell_updates:
                 continue
