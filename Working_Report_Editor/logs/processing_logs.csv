@@ -1,18 +1,1 @@
 Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,Department,Employee_Name,Date,Reason,Processing_Time_Sec
-2026-05-20 16:24:50,19e45d90286870d3,Re: report,abhijit.edujam@gmail.com,Abhijit,2026-05-20T14:44:57,SUCCESS,Sales,Abhijit,20-05-2026,,12.61
-2026-05-20 16:25:03,19e45d3e65175cef,REPORT,aishwary.edujam@gmail.com,Aishwary,2026-05-20T14:39:21,SUCCESS,Sales,Aishwary,20-05-2026,,12.92
-2026-05-20 16:25:45,19e45cdfa08a34ff,Daily Report of 20-05-2026,komals.edujam@gmail.com,Komal,2026-05-20T14:32:53,SUCCESS,Sales,Komal,20-05-2026,,41.50
-2026-05-20 16:25:52,19e45cdd3417efda,Daily Report of 20-05-2026,supriyav.edujam@gmail.com,Supriya,2026-05-20T14:32:00,SUCCESS,Sales,Supriya,20-05-2026,,7.12
-2026-05-20 16:26:06,19e45cd7d11bef0f,Daily Report of 18-05-2026,apoorva.edujam@gmail.com,Apoorva,2026-05-20T14:32:21,SUCCESS,Sales,Apoorva,20-05-2026,,14.19
-2026-05-20 16:26:22,19e45c8e3dbb800e,Daily Report of 20-05-2026,saylip.edujam@gmail.com,Sayli,2026-05-20T14:27:16,SUCCESS,Sales,Sayli,20-05-2026,,15.80
-2026-05-20 16:27:10,19e45be93cd41076,Kra Daily Report of 20-05-2026,siddhesh.edujam@gmail.com,Siddhesh,2026-05-20T14:16:04,SUCCESS,Sales,Siddhesh,20-05-2026,,5.74
-2026-05-20 16:27:24,19e45b8926af7e8e,Daily Report of 18-05-2026,sachingodara.edujam@gmail.com,Sachin,2026-05-20T14:09:30,SUCCESS,Sales,Sachin,20-05-2026,,14.39
-2026-05-20 16:28:07,19e45b8558882da3,REPORT,saifd.edujam@gmail.com,Saif,2026-05-20T14:09:13,SUCCESS,Sales,Saif,20-05-2026,,42.94
-2026-05-20 16:28:23,19e45aafd259355e,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-05-20T13:54:40,FAILED,HR,Amanpreet,20-05-2026,"Missing required fields: Total Calls, Connected Calls",15.57
-2026-05-20 16:28:25,19e45a5ffc5d3fce,Report - 20-05-2026,jayesha.edujam@gmail.com,Jayesh,2026-05-20T13:49:13,SUCCESS,Sales,Jayesh,20-05-2026,,2.88
-2026-05-20 16:28:57,19e45a3a4cd62ac9,Daily Report of 20-05-2026,manasvi.edujam@gmail.com,Manasvi,2026-05-20T13:46:39,SUCCESS,Sales,Manasvi,20-05-2026,,31.54
-2026-05-20 16:28:59,19e4596c82a98884,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-05-20T13:32:38,SUCCESS,HR,Mehvish,20-05-2026,,2.10
-2026-05-20 16:28:59,19e4595d2a197b75,Daily report,ruwaida.hredujam@gmail.com,Ruwaida,2026-05-20T13:31:33,SUCCESS,HR,Ruwaida,20-05-2026,,0.28
-2026-05-20 16:30:00,19e454279057d878,Daily Report of 20-05-2026,rajeshp.edujam@gmail.com,Rajesh,2026-05-20T12:00:29,SUCCESS,Sales,Rajesh,20-05-2026,,60.99
-2026-05-20 18:42:09,19e4680817b8e4d4,Daily Report of 20-5-2026,dhanshree.edujam@gmail.com,Dhanshree,2026-05-20T17:47:51,SUCCESS,Sales,Dhanshree,20-05-2026,,98.91
-2026-05-20 18:42:12,19e45aafd259355e,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-05-20T13:54:40,SUCCESS,HR,Amanpreet,20-05-2026,,1.09
