@@ -3,8 +3,7 @@ vision_parser.py — Parse Callyzer report screenshot correctly
 Reads: Total Phone Calls, Connected Calls, and Total Phone Calls Duration
 UPDATED: Changed from "Outgoing Calls" to "Total Phone Calls" section
 UPDATED: Added delay between API calls to respect quota
-UPDATED: Added detection for suspicious default responses (quota issue)
-UPDATED: Returns None for suspicious defaults so mismatch tag isn't added
+UPDATED: Returns None for suspicious defaults so no status is added
 """
 
 import json
@@ -27,7 +26,6 @@ logger = logging.getLogger(__name__)
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# UPDATED PROMPT - Read from "Total Phone Calls" section
 _VISION_PROMPT = """
 You are analyzing a Callyzer report screenshot. Extract data from the "Total Phone Calls" section.
 
@@ -55,11 +53,10 @@ RULES:
 DO NOT read from "Outgoing Calls", "Incoming Calls", or "Missed Calls" sections.
 """
 
-# Suspicious default values that indicate Gemini quota/caching issue
 SUSPICIOUS_DEFAULTS = [
-    {"calls": 110, "connected": 55, "duration": "01:33:33"},  # Common default
-    {"calls": 100, "connected": 27, "duration": "00:28:10"},  # Previous default
-    {"calls": 92, "connected": 92, "duration": "00:28:10"},   # Another default
+    {"calls": 110, "connected": 55, "duration": "01:33:33"},
+    {"calls": 100, "connected": 27, "duration": "00:28:10"},
+    {"calls": 92, "connected": 92, "duration": "00:28:10"},
 ]
 
 
@@ -79,7 +76,6 @@ class VisionParser:
         self._last_api_call_time = time.time()
 
     def _is_suspicious_default(self, data: Dict) -> bool:
-        """Check if the parsed data matches known suspicious default patterns (quota issue)"""
         calls = data.get("Total Phone Calls", 0)
         connected = data.get("Connected Calls", 0)
         duration = data.get("Total Phone Calls Duration", "")
@@ -88,7 +84,7 @@ class VisionParser:
             if (calls == default["calls"] and 
                 connected == default["connected"] and 
                 duration == default["duration"]):
-                logger.warning(f"⚠️ Detected suspicious default values (calls={calls}, connected={connected}, duration={duration}) - likely quota/caching issue")
+                logger.warning(f"⚠️ Detected suspicious default values - likely quota/caching issue")
                 return True
         return False
 
@@ -106,7 +102,6 @@ class VisionParser:
             w, h = img.size
             logger.info(f"Original image size: {w}x{h}")
             
-            # Focus on the Total Phone Calls section
             crop_bottom = int(h * 0.50)
             img = img.crop((0, 0, w, crop_bottom))
             logger.info(f"Cropped to Total Phone Calls section: {img.size}")
@@ -124,7 +119,7 @@ class VisionParser:
 
             try:
                 self._wait_for_quota()
-                logger.info("Calling Gemini Vision API (focused on Total Phone Calls)...")
+                logger.info("Calling Gemini Vision API...")
                 response = self.model.generate_content([_VISION_PROMPT, temp_path])
                 raw_text = response.text.strip()
                 logger.info(f"Vision API response: {raw_text[:300]}")
@@ -141,29 +136,26 @@ class VisionParser:
 
             cleaned_data = self._clean(data)
             
-            # Check for suspicious default values (quota issue)
             if self._is_suspicious_default(cleaned_data):
-                logger.warning("Suspicious default detected - returning None to prevent false mismatch")
+                logger.warning("Suspicious default detected - returning None")
                 return None
             
             return cleaned_data
 
         except Exception as exc:
             if "429" in str(exc):
-                logger.warning(f"Quota exceeded, waiting longer before retry...")
+                logger.warning(f"Quota exceeded, waiting longer...")
                 time.sleep(30)
             else:
                 logger.error(f"Image processing failed: {exc}")
             return None
 
     def _fallback_extraction(self, img: Image.Image) -> Optional[Dict]:
-        """Fallback using OCR - specifically looks for Total Phone Calls section"""
         try:
             import pytesseract
             text = pytesseract.image_to_string(img)
             logger.info(f"OCR extracted text: {text[:500]}")
             
-            # Look for Total Phone Calls section
             total_match = re.search(r'Total\s+Phone\s+Calls[^\d]*(\d+)[^\d]*([\d\s]+[hms]+[\d\s]+[hms]*)', text, re.IGNORECASE | re.DOTALL)
             
             total_calls = 0
@@ -173,7 +165,6 @@ class VisionParser:
                 total_calls = int(total_match.group(1))
                 duration_text = total_match.group(2)
                 
-                # Parse duration from text
                 duration_match = re.search(r'(\d+)\s*h\s*(\d+)\s*m\s*(\d+)\s*s', duration_text, re.IGNORECASE)
                 if duration_match:
                     h, m, s = int(duration_match.group(1)), int(duration_match.group(2)), int(duration_match.group(3))
@@ -189,13 +180,11 @@ class VisionParser:
                             m = int(duration_match.group(1))
                             duration = f"00:{m:02d}:00"
             
-            # Extract Connected Calls
             connected_match = re.search(r'Connected\s+Calls[^\d]*(\d+)', text, re.IGNORECASE)
             connected = int(connected_match.group(1)) if connected_match else 0
             
-            # Check if OCR also returned suspicious values
             if total_calls == 110 and connected == 55 and duration == "01:33:33":
-                logger.warning("OCR also returned suspicious default values - returning None")
+                logger.warning("OCR also returned suspicious default values")
                 return None
             
             logger.info(f"OCR fallback: TotalCalls={total_calls}, Connected={connected}, Duration={duration}")
@@ -242,42 +231,35 @@ class VisionParser:
         if not duration_str or duration_str == "00:00:00":
             return "00:00:00"
 
-        # Handle HH.MM.SS format (dots)
         match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', duration_str)
         if match:
             h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
 
-        # Handle "1h 33m 33s" format
         match = re.search(r'(\d+)h\s*(\d+)m\s*(\d+)s', duration_str, re.IGNORECASE)
         if match:
             h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
 
-        # Handle "33m 33s" format
         match = re.search(r'(\d+)m\s*(\d+)s', duration_str, re.IGNORECASE)
         if match:
             m, s = int(match.group(1)), int(match.group(2))
             return f"00:{m:02d}:{s:02d}"
 
-        # Handle "1h 33m" format
         match = re.search(r'(\d+)h\s*(\d+)m', duration_str, re.IGNORECASE)
         if match:
             h, m = int(match.group(1)), int(match.group(2))
             return f"{h:02d}:{m:02d}:00"
 
-        # Handle "33m" format
         match = re.search(r'(\d+)m', duration_str, re.IGNORECASE)
         if match and 'h' not in duration_str:
             m = int(match.group(1))
             return f"00:{m:02d}:00"
 
-        # Handle HH:MM:SS format
         match = re.search(r'(\d{2}):(\d{2}):(\d{2})', duration_str)
         if match:
             return duration_str
 
-        # Handle MM:SS
         match = re.search(r'(\d{2}):(\d{2})', duration_str)
         if match:
             m, s = int(match.group(1)), int(match.group(2))
