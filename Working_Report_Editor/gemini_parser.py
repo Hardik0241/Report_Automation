@@ -235,17 +235,14 @@ class GeminiParser:
             for kw in keywords:
                 kw_esc = re.escape(kw)
                 
-                # Pattern for HH:MM:SS with colons
                 pattern_time = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}:\d{{2}}:\d{{2}})"
                 match = re.search(pattern_time, text)
                 if match:
                     return match.group(1)
                 
-                # Pattern for HH.MM.SS with dots (Jayesh's format)
                 pattern_dots = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}\.\d{{2}}\.\d{{2}})"
                 match = re.search(pattern_dots, text)
                 if match:
-                    # Convert dots to colons
                     return match.group(1).replace('.', ':')
                 
                 pattern_time_colon = rf"(?i){kw_esc}[\s]*:[\s]*(\d{{2}}:\d{{2}}:\d{{2}})"
@@ -307,7 +304,6 @@ class GeminiParser:
             if duration and duration != "00:00:00" and ':' not in duration and '.' not in duration:
                 duration = parse_duration(duration)
             
-            # UPDATED: HR Lineups extraction with more flexible patterns
             lineups = 0
             lineup_patterns = [
                 r"(?i)total[\s]+line[\s]+ups?[\s]+for[\s]+tomorrow[\s]*[-:][\s]*(\d+)",
@@ -325,7 +321,6 @@ class GeminiParser:
                     logger.info(f"HR Lineups extracted: {lineups} using pattern: {pattern}")
                     break
             
-            # UPDATED: HR Interview Held extraction
             held = 0
             held_patterns = [
                 r"(?i)today[\s]+held[\s]*-[\s]*(\d+)",
@@ -405,12 +400,10 @@ class GeminiParser:
         if 'leave' in text.lower():
             return "00:00:00"
         
-        # HH:MM:SS with colons
         match = re.search(r'(\d{2}):(\d{2}):(\d{2})', text)
         if match:
             return match.group(0)
         
-        # HH.MM.SS with dots
         match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', text)
         if match:
             h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
