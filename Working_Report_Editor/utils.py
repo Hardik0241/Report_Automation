@@ -1,8 +1,8 @@
 """
 utils.py — Shared utility functions: date extraction, duration parsing, math handling
-UPDATED: Added support for dot-separated duration format (HH.MM.SS)
-UPDATED: Fixed duration parsing for addition patterns like "+7 minutes", "+10 min"
-UPDATED: Added more robust duration extraction for HH:MM:SS format with dashes
+UPDATED: Added support for text-based addition patterns (also add, add, plus)
+UPDATED: Added dot-separated duration format (HH.MM.SS)
+UPDATED: Fixed duration parsing for addition patterns like "+7 minutes", "+10 min", "also add 10 min"
 """
 
 import re
@@ -73,7 +73,8 @@ def parse_duration(raw: str) -> str:
     - "1h 49m 16s + 12m" → 02:01:16
     - "Duration- 01:28:52" → 01:28:52
     - "01:28:52" → 01:28:52
-    - "02.07.36" → 02:07:36 (dot separator)
+    - "02.07.36" → 02:07:36
+    - "1H 1M + 20 M, Also add 10 min" → 01:31:00
     """
     if not raw:
         return "00:00:00"
@@ -88,7 +89,7 @@ def parse_duration(raw: str) -> str:
     if match:
         return match.group(0)
     
-    # Handle HH.MM.SS format with dots (Jayesh's format)
+    # Handle HH.MM.SS format with dots
     match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', raw)
     if match:
         h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
@@ -100,12 +101,15 @@ def parse_duration(raw: str) -> str:
         m, s = int(match.group(1)), int(match.group(2))
         return f"00:{m:02d}:{s:02d}"
     
-    # Handle multiple durations with "+"
-    if '+' in raw:
-        parts = raw.split('+')
+    # Handle multiple durations with "+" and text additions
+    if '+' in raw or re.search(r'(also add|add|plus|additional)', raw, re.IGNORECASE):
         total_seconds = 0
+        
+        # Split by common separators
+        parts = re.split(r'[\+]|also add|add|plus|additional', raw, flags=re.IGNORECASE)
         for part in parts:
-            total_seconds += _duration_to_seconds(part.strip())
+            if part.strip():
+                total_seconds += _duration_to_seconds(part.strip())
         return _seconds_to_hms(total_seconds)
     
     seconds = _duration_to_seconds(raw)
@@ -116,9 +120,10 @@ def _duration_to_seconds(duration_str: str) -> int:
     duration_str = duration_str.strip().lower()
     total_seconds = 0
     
-    duration_str = re.sub(r'\s+(?:on|from|another|whatsapp|other|phone).*$', '', duration_str, flags=re.IGNORECASE)
+    # Remove any text in parentheses or after keywords
+    duration_str = re.sub(r'\s+(?:on|from|another|whatsapp|other|phone|personal|prsnl).*$', '', duration_str, flags=re.IGNORECASE)
     
-    # Handle addition patterns
+    # Handle addition patterns with + symbol
     addition_match = re.search(r'\+\s*(\d+)\s*(?:min(?:ute)?s?)', duration_str, re.IGNORECASE)
     if addition_match:
         extra_minutes = int(addition_match.group(1))
@@ -136,6 +141,13 @@ def _duration_to_seconds(duration_str: str) -> int:
         extra_seconds = int(addition_match.group(1))
         total_seconds += extra_seconds
         duration_str = re.sub(r'\+\s*\d+\s*s', '', duration_str, flags=re.IGNORECASE)
+    
+    # Handle text-based addition patterns (also add X min, add X minutes, plus X min)
+    text_addition = re.search(r'(?:also add|add|plus|additional)\s+(\d+)\s*(?:min(?:ute)?s?)', duration_str, re.IGNORECASE)
+    if text_addition:
+        extra_minutes = int(text_addition.group(1))
+        total_seconds += extra_minutes * 60
+        duration_str = re.sub(r'(?:also add|add|plus|additional)\s+\d+\s*(?:min(?:ute)?s?)', '', duration_str, flags=re.IGNORECASE)
     
     # Handle HH.MM.SS format with dots
     match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', duration_str)
