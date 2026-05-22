@@ -2,6 +2,7 @@
 utils.py — Shared utility functions: date extraction, duration parsing, math handling
 UPDATED: Added support for text-based addition patterns (also add, add, plus)
 UPDATED: Added dot-separated duration format (HH.MM.SS)
+UPDATED: Added support for single-digit seconds format (HH:MM:M) - e.g., 01:28:0
 UPDATED: Fixed duration parsing for addition patterns like "+7 minutes", "+10 min", "also add 10 min"
 """
 
@@ -74,6 +75,7 @@ def parse_duration(raw: str) -> str:
     - "Duration- 01:28:52" → 01:28:52
     - "01:28:52" → 01:28:52
     - "02.07.36" → 02:07:36
+    - "01:28:0" → 01:28:00 (single digit seconds)
     - "1H 1M + 20 M, Also add 10 min" → 01:31:00
     """
     if not raw:
@@ -84,15 +86,31 @@ def parse_duration(raw: str) -> str:
     if 'leave' in raw.lower():
         return "00:00:00"
     
-    # Handle HH:MM:SS format with colons
+    # Handle HH:MM:SS format with colons (exactly 2 digits each)
     match = re.search(r'(\d{2}):(\d{2}):(\d{2})', raw)
     if match:
         return match.group(0)
+    
+    # Handle HH:MM:M format with single digit seconds (e.g., 01:28:0)
+    match = re.search(r'(\d{1,2}):(\d{1,2}):(\d{1})', raw)
+    if match:
+        h = int(match.group(1))
+        m = int(match.group(2))
+        s = int(match.group(3))
+        return f"{h:02d}:{m:02d}:{s:02d}"
     
     # Handle HH.MM.SS format with dots
     match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', raw)
     if match:
         h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        return f"{h:02d}:{m:02d}:{s:02d}"
+    
+    # Handle HH:MM:SS format with single digit hour/minute (e.g., 1:28:30)
+    match = re.search(r'(\d{1,2}):(\d{1,2}):(\d{1,2})', raw)
+    if match:
+        h = int(match.group(1))
+        m = int(match.group(2))
+        s = int(match.group(3))
         return f"{h:02d}:{m:02d}:{s:02d}"
     
     # Handle MM:SS format
@@ -156,6 +174,15 @@ def _duration_to_seconds(duration_str: str) -> int:
         total_seconds += h * 3600 + m * 60 + s
         return total_seconds
     
+    # Handle HH:MM:M format with single digit seconds (e.g., 01:28:0)
+    match = re.search(r'(\d{1,2}):(\d{1,2}):(\d{1})', duration_str)
+    if match:
+        h = int(match.group(1))
+        m = int(match.group(2))
+        s = int(match.group(3))
+        total_seconds += h * 3600 + m * 60 + s
+        return total_seconds
+    
     # Parse main duration - text formats
     match = re.search(r'(\d+)\s*h(?:r)?s?\s*(\d+)\s*m(?:in)?s?\s*(\d+)\s*s(?:ec)?s?', duration_str, re.IGNORECASE)
     if match:
@@ -201,6 +228,13 @@ def _duration_to_seconds(duration_str: str) -> int:
     if match:
         h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
         total_seconds += h * 3600 + m * 60 + s
+        return total_seconds
+    
+    # Handle HH:MM format with colons
+    match = re.search(r'(\d{2}):(\d{2})', duration_str)
+    if match:
+        h, m = int(match.group(1)), int(match.group(2))
+        total_seconds += h * 3600 + m * 60
         return total_seconds
     
     # Handle MM:SS format
