@@ -1,1 +1,16 @@
 Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,Department,Employee_Name,Date,Reason,Processing_Time_Sec
+2026-05-25 15:50:15,19e5f903b85f70b0,KRA Report,sakibs.edujam@gmail.com,Sakib,2026-05-25T14:35:16,SUCCESS,Sales,Sakib,25-05-2026,,9.75
+2026-05-25 15:50:18,19e5f8e48cb56723,Daily Report of 25-05-2026,apoorva.edujam@gmail.com,Apoorva,2026-05-25T14:33:20,SUCCESS,Sales,Apoorva,25-05-2026,,2.85
+2026-05-25 15:50:22,19e5f8b550fa6c1a,Daily Report of 23-05-2026,komals.edujam@gmail.com,Komal,2026-05-25T14:30:13,SUCCESS,Sales,Komal,25-05-2026,,3.39
+2026-05-25 15:50:26,19e5f8a154b0bb24,Daily Report of 25-05-2026,supriyav.edujam@gmail.com,Supriya,2026-05-25T14:28:46,SUCCESS,Sales,Supriya,25-05-2026,,4.05
+2026-05-25 15:50:29,19e5f89d613e24aa,REPORT,aishwary.edujam@gmail.com,Aishwary,2026-05-25T14:28:33,SUCCESS,Sales,Aishwary,25-05-2026,,2.92
+2026-05-25 15:50:32,19e5f8929bf31bfb,Daily Report of 25-05-2026,siddhesh.edujam@gmail.com,Siddhesh,2026-05-25T14:27:51,SUCCESS,Sales,Siddhesh,25-05-2026,,2.93
+2026-05-25 15:50:32,19e5f8756b6d1ef7,25/05/26,muskan.edujam@gmail.com,Muskan,2026-05-25T14:25:52,SUCCESS,Sales,Muskan,25-05-2026,,0.39
+2026-05-25 15:50:32,19e5f85c43c7b526,Daily Report of 25-05-2026,rajeshp.edujam@gmail.com,Rajesh,2026-05-25T14:24:09,SUCCESS,Sales,Rajesh,25-05-2026,,0.39
+2026-05-25 15:50:33,19e5f7c85bf73286,Daily Report of 25-05-2026,manasvi.edujam@gmail.com,Manasvi,2026-05-25T14:14:01,SUCCESS,Sales,Manasvi,25-05-2026,,0.34
+2026-05-25 15:50:33,19e5f7a07c9b127f,Report - 25-05-2026,jayesha.edujam@gmail.com,Jayesh,2026-05-25T14:11:18,SUCCESS,Sales,Jayesh,25-05-2026,,0.37
+2026-05-25 15:50:33,19e5f6db6060b057,Daily Report of 25-05-2026,sachingodara.edujam@gmail.com,Sachin,2026-05-25T13:57:50,SUCCESS,Sales,Sachin,25-05-2026,,0.42
+2026-05-25 15:50:35,19e5f5502be86216,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-05-25T13:31:00,SUCCESS,HR,Amanpreet,25-05-2026,,2.02
+2026-05-25 15:50:36,19e5f548a2e31d33,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-05-25T13:30:22,SUCCESS,HR,Salomi,25-05-2026,,0.27
+2026-05-25 15:50:36,19e5f546315ef18a,Daily report,ruwaida.hredujam@gmail.com,Ruwaida,2026-05-25T13:30:11,SUCCESS,HR,Ruwaida,25-05-2026,,0.27
+2026-05-25 15:50:36,19e5f542f33d5323,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-05-25T13:30:01,SUCCESS,HR,Mehvish,25-05-2026,,0.29
