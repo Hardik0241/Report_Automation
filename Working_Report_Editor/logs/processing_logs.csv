@@ -1,1 +1,14 @@
 Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,Department,Employee_Name,Date,Reason,Processing_Time_Sec
+2026-05-28 16:53:39,19e6f003f1a56280,Daily Report of 28-05-2026,komals.edujam@gmail.com,Komal,2026-05-28T14:32:11,SUCCESS,Sales,Komal,28-05-2026,,7.88
+2026-05-28 16:53:44,19e6eff669ce0dbb,Daily Report of 28-05-2026,rajeshp.edujam@gmail.com,Rajesh,2026-05-28T14:31:19,SUCCESS,Sales,Rajesh,28-05-2026,,4.31
+2026-05-28 16:53:47,19e6efec33da1b27,Daily Report,supriyav.edujam@gmail.com,Supriya,2026-05-28T14:30:00,SUCCESS,Sales,Supriya,28-05-2026,,2.81
+2026-05-28 16:53:50,19e6efb0b8f885b7,Daily Report of 28-05-2026,saylip.edujam@gmail.com,Sayli,2026-05-28T14:26:32,SUCCESS,Sales,Sayli,28-05-2026,,3.11
+2026-05-28 16:53:53,19e6ef3cf48ae6a5,report,abhijit.edujam@gmail.com,Abhijit,2026-05-28T14:18:40,SUCCESS,Sales,Abhijit,28-05-2026,,2.94
+2026-05-28 16:53:56,19e6eef571641618,REPORT,aishwary.edujam@gmail.com,Aishwary,2026-05-28T14:13:45,SUCCESS,Sales,Aishwary,28-05-2026,,3.78
+2026-05-28 16:53:57,19e6ee9f2e218e2a,Daily Report of 28-05-2026,siddhesh.edujam@gmail.com,Siddhesh,2026-05-28T14:07:53,SUCCESS,Sales,Siddhesh,28-05-2026,,0.38
+2026-05-28 16:53:57,19e6ee2d135c27d1,Report - 28-05-2026,jayesha.edujam@gmail.com,Jayesh,2026-05-28T14:00:03,SUCCESS,Sales,Jayesh,28-05-2026,,0.39
+2026-05-28 16:53:58,19e6edf8fd0283c7,Daily Report of 28-05-2026,manasvi.edujam@gmail.com,Manasvi,2026-05-28T13:56:31,SUCCESS,Sales,Manasvi,28-05-2026,,0.41
+2026-05-28 16:53:58,19e6ede77683ab02,Daily Report of 28-05-2026,apoorva.edujam@gmail.com,Apoorva,2026-05-28T13:55:18,SUCCESS,Sales,Apoorva,28-05-2026,,0.39
+2026-05-28 16:53:58,19e6ed286a7f27fa,Daily Report of 28-05-2026,sachingodara.edujam@gmail.com,Sachin,2026-05-28T13:42:16,SUCCESS,Sales,Sachin,28-05-2026,,0.35
+2026-05-28 16:54:01,19e6ecb93f4bab73,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-05-28T13:34:41,SUCCESS,HR,Amanpreet,28-05-2026,,2.15
+2026-05-28 16:54:01,19e6ec85e400fbbe,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-05-28T13:31:12,SUCCESS,HR,Salomi,28-05-2026,,0.24
