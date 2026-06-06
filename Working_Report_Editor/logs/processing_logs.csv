@@ -1,1 +1,16 @@
 Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,Department,Employee_Name,Date,Reason,Processing_Time_Sec
+2026-06-06 14:29:18,19e9d431e213a05d,KRA Report,sakibs.edujam@gmail.com,Sakib,2026-06-06T14:07:42,SUCCESS,Sales,Sakib,06-06-2026,,8.67
+2026-06-06 14:29:22,19e9d38410624cda,Daily Report of 06-06-2026,rajeshp.edujam@gmail.com,Rajesh,2026-06-06T13:55:56,SUCCESS,Sales,Rajesh,06-06-2026,,4.19
+2026-06-06 14:29:25,19e9d3755cbc9eb3,06/06/26,muskan.edujam@gmail.com,Muskan,2026-06-06T13:54:56,SUCCESS,Sales,Muskan,06-06-2026,,2.85
+2026-06-06 14:29:29,19e9d346ba7a87d6,Report,abhijit.edujam@gmail.com,Abhijit,2026-06-06T13:51:44,SUCCESS,Sales,Abhijit,06-06-2026,,3.49
+2026-06-06 14:29:33,19e9d345924c2330,REPORT,aishwary.edujam@gmail.com,Aishwary,2026-06-06T13:51:35,SUCCESS,Sales,Aishwary,06-06-2026,,4.03
+2026-06-06 14:29:38,19e9d30036a3a073,REPORT,saifd.edujam@gmail.com,Saif,2026-06-06T13:46:56,SUCCESS,Sales,Saif,06-06-2026,,5.78
+2026-06-06 14:29:39,19e9d2c34509a134,daily report,supriyav.edujam@gmail.com,Supriya,2026-06-06T13:42:40,SUCCESS,Sales,Supriya,06-06-2026,,0.55
+2026-06-06 14:29:39,19e9d2adf459cdd7,Report - 06-06-2026,jayesha.edujam@gmail.com,Jayesh,2026-06-06T13:41:19,SUCCESS,Sales,Jayesh,06-06-2026,,0.53
+2026-06-06 14:29:40,19e9d27fcad6f4e8,Daily Report of 06-06-2026,manasvi.edujam@gmail.com,Manasvi,2026-06-06T13:38:11,SUCCESS,Sales,Manasvi,06-06-2026,,0.50
+2026-06-06 14:29:45,19e9d22e9dfd1ce5,Daily Report of 06-06-2026,sachingodara.edujam@gmail.com,Sachin,2026-06-06T13:32:37,SUCCESS,Sales,Sachin,06-06-2026,,4.63
+2026-06-06 14:29:45,19e9d21bed74429e,Daily Report of 06-06-2026,komals.edujam@gmail.com,Komal,2026-06-06T13:31:20,SUCCESS,Sales,Komal,06-06-2026,,0.48
+2026-06-06 14:29:47,19e9d20c168645af,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-06-06T13:30:16,SUCCESS,HR,Salomi,06-06-2026,,2.29
+2026-06-06 14:29:48,19e9d208ddc43ff7,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-06-06T13:30:03,SUCCESS,HR,Amanpreet,06-06-2026,,0.32
+2026-06-06 14:29:48,19e9cddb026e2ee0,Calling Report,prafulp.edujam@gmail.com,Praful,2026-06-06T12:16:58,SUCCESS,Sales,Praful,06-06-2026,,0.47
+2026-06-06 14:29:49,19e9ccc983e020b5,Calling report and prospect sheet,apoorva.edujam@gmail.com,Apoorva,2026-06-06T11:58:18,SUCCESS,Sales,Apoorva,06-06-2026,,0.49
