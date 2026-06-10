@@ -1,1 +1,15 @@
 Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,Department,Employee_Name,Date,Reason,Processing_Time_Sec
+2026-06-10 16:35:31,19eb1edf57e8a3f4,KRA Report,sakibs.edujam@gmail.com,Sakib,2026-06-10T14:26:39,SUCCESS,Sales,Sakib,10-06-2026,,10.16
+2026-06-10 16:35:34,19eb1eda511c3f57,Reports,apoorva.edujam@gmail.com,Apoorva,2026-06-10T14:26:26,SUCCESS,Sales,Apoorva,10-06-2026,,3.30
+2026-06-10 16:35:38,19eb1ec848d149b8,Daily Report of 10-06-2026,rajeshp.edujam@gmail.com,Rajesh,2026-06-10T14:25:15,SUCCESS,Sales,Rajesh,10-06-2026,,4.01
+2026-06-10 16:35:45,19eb1e9dcd7e25d9,report,abhijit.edujam@gmail.com,Abhijit,2026-06-10T14:22:18,SUCCESS,Sales,Abhijit,10-06-2026,,6.31
+2026-06-10 16:35:48,19eb1e1146cd14f9,daily report,siddhesh.edujam@gmail.com,Siddhesh,2026-06-10T14:12:45,SUCCESS,Sales,Siddhesh,10-06-2026,,3.56
+2026-06-10 16:35:52,19eb1ddda78d45fa,daily report,supriyav.edujam@gmail.com,Supriya,2026-06-10T14:09:09,SUCCESS,Sales,Supriya,10-06-2026,,3.93
+2026-06-10 16:35:55,19eb1d9789f38da1,Daily Report of 10-06-2026,sachingodara.edujam@gmail.com,Sachin,2026-06-10T14:04:27,SUCCESS,Sales,Sachin,10-06-2026,,2.77
+2026-06-10 16:35:58,19eb1d148eb1cc36,Daily Report of 10-06-2026,komals.edujam@gmail.com,Komal,2026-06-10T13:55:30,SUCCESS,Sales,Komal,10-06-2026,,3.50
+2026-06-10 16:35:59,19eb1c9a5909b67e,REPORT,saifd.edujam@gmail.com,Saif,2026-06-10T13:47:07,SUCCESS,Sales,Saif,10-06-2026,,0.49
+2026-06-10 16:35:59,19eb1c97f4c70c00,REPORT,aishwary.edujam@gmail.com,Aishwary,2026-06-10T13:46:58,SUCCESS,Sales,Aishwary,10-06-2026,,0.44
+2026-06-10 16:36:02,19eb1c0b27183850,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-06-10T13:37:24,SUCCESS,HR,Mehvish,10-06-2026,,2.68
+2026-06-10 16:36:02,19eb1be4cbf087b6,10/06/26,muskan.edujam@gmail.com,Muskan,2026-06-10T13:34:44,SUCCESS,Sales,Muskan,10-06-2026,,0.45
+2026-06-10 16:36:03,19eb1baeace55b9f,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-06-10T13:31:02,SUCCESS,HR,Amanpreet,10-06-2026,,0.25
+2026-06-10 16:36:03,19eb1ba3c7ad6d7a,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-06-10T13:30:19,SUCCESS,HR,Salomi,10-06-2026,,0.30
