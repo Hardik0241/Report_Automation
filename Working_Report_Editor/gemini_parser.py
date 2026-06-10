@@ -3,6 +3,7 @@ gemini_parser.py — Parse email body into structured data using Gemini.
 UPDATED: Fixed HR regex for "Total Line ups for tomorrow" (plural, dash, colon)
 UPDATED: Fixed duration extraction for HH:MM:SS format with dash and dots
 UPDATED: Added support for "sec" as seconds identifier (e.g., 8sec, 42m 8sec)
+UPDATED: Added support for "total dialled" (double L) spelling variation
 UPDATED: Improved call number extraction precision
 """
 
@@ -31,7 +32,7 @@ Return ONLY a JSON object — no markdown, no explanation.
 IMPORTANT: First determine if this is a SALES or HR report based on content.
 
 For a SALES report, look for:
-- "total dialed", "total dial", "dials", "total calls", "calls made", "dial"
+- "total dialed", "total dial", "total dialled", "dials", "total calls", "calls made", "dial"
 - "connected", "conn", "total connected", "connected calls"  
 - "duration", "dur", "talk time", "time"
 - "prospect", "prospects", "pros"
@@ -68,7 +69,7 @@ Rules:
 - Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
 - If the email contains "Leave" or "leave" anywhere, mark as "Leave" and skip.
-- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "1h 42m 8sec"
+- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "2.08.32", "1h 42m 8sec"
 
 Email content:
 """
@@ -175,7 +176,7 @@ class GeminiParser:
                 return "HR"
         
         sales_keywords = [
-            "sales", "dialer", "prospect", "dialed", "dial", 
+            "sales", "dialer", "prospect", "dialed", "dial", "dialled",
             "outgoing", "total dialed", "total connected", "connected calls", 
             "duration", "total dial", "total calls", "calls made",
             "bde", "bde name", "bde -", "prospects"
@@ -241,8 +242,13 @@ class GeminiParser:
                 if match:
                     return match.group(1)
                 
-                pattern_dots = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}\.\d{{2}}\.\d{{2}})"
-                match = re.search(pattern_dots, text)
+                pattern_dots_two = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}\.\d{{2}}\.\d{{2}})"
+                match = re.search(pattern_dots_two, text)
+                if match:
+                    return match.group(1).replace('.', ':')
+                
+                pattern_dots_one = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{1}}\.\d{{2}}\.\d{{2}})"
+                match = re.search(pattern_dots_one, text)
                 if match:
                     return match.group(1).replace('.', ':')
                 
@@ -271,8 +277,8 @@ class GeminiParser:
 
         if dept == "Sales":
             total_dialed = grab_number([
-                "total dial", "total dials", "total dialed", "total calls", 
-                "calls made", "dials", "dial"
+                "total dial", "total dials", "total dialed", "total dialled",
+                "total calls", "calls made", "dials", "dial"
             ])
             total_connected = grab_number([
                 "total connected", "connected calls", "connected", 
@@ -363,6 +369,7 @@ class GeminiParser:
         bde_patterns = [
             r'BDE[:\s-]+\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)',
             r'BDE Name[:\s-]+\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)',
+            r'BDE NAME[:\s-]+\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)',
             r'Name[:\s-]+\s*([A-Za-z]+(?:\s+[A-Za-z]+)?)',
         ]
         for pattern in bde_patterns:
@@ -411,9 +418,18 @@ class GeminiParser:
         if match:
             return match.group(0)
         
+        # Handle HH.MM.SS with two-digit hour
         match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', text)
         if match:
             h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        
+        # Handle H.MM.SS with single-digit hour (e.g., 2.08.32)
+        match = re.search(r'(\d{1})\.(\d{2})\.(\d{2})', text)
+        if match:
+            h = int(match.group(1))
+            m = int(match.group(2))
+            s = int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
         
         # Handle "1h 42m 8sec" format
