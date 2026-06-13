@@ -1,1 +1,14 @@
 Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,Department,Employee_Name,Date,Reason,Processing_Time_Sec
+2026-06-13 14:59:33,19ec14d38c4eb612,KRA Report,sakibs.edujam@gmail.com,Sakib,2026-06-13T14:04:53,SUCCESS,Sales,Sakib,13-06-2026,,7.94
+2026-06-13 14:59:36,19ec1469330a25fd,Re: Daily Report of 13-06-2026,saylip.edujam@gmail.com,Sayli,2026-06-13T13:57:56,SUCCESS,Sales,Sayli,13-06-2026,,3.50
+2026-06-13 14:59:43,19ec14216448be13,Daily Report of 13-06-2026,apoorva.edujam@gmail.com,Apoorva,2026-06-13T13:52:58,SUCCESS,Sales,Apoorva,13-06-2026,,3.52
+2026-06-13 14:59:45,19ec13dd2faa0681,Report - 13-06-2026,jayesha.edujam@gmail.com,Jayesh,2026-06-13T13:48:21,SUCCESS,Sales,Jayesh,13-06-2026,,2.36
+2026-06-13 14:59:48,19ec13cba792e6d0,Daily Report of 13-06-2026,sachingodara.edujam@gmail.com,Sachin,2026-06-13T13:47:09,SUCCESS,Sales,Sachin,13-06-2026,,2.98
+2026-06-13 14:59:49,19ec138f38c46abb,REPORT,saifd.edujam@gmail.com,Saif,2026-06-13T13:43:00,SUCCESS,Sales,Saif,13-06-2026,,0.37
+2026-06-13 14:59:49,19ec1377deffd4dd,daily reports,supriyav.edujam@gmail.com,Supriya,2026-06-13T13:40:00,SUCCESS,Sales,Supriya,13-06-2026,,0.57
+2026-06-13 14:59:50,19ec136511964ad1,REPORT,aishwary.edujam@gmail.com,Aishwary,2026-06-13T13:40:08,SUCCESS,Sales,Aishwary,13-06-2026,,0.37
+2026-06-13 14:59:50,19ec1361d50b26d7,Daily Report of 12-06-2026,manasvi.edujam@gmail.com,Manasvi,2026-06-13T13:39:55,SUCCESS,Sales,Manasvi,13-06-2026,,0.39
+2026-06-13 14:59:51,19ec133415b8eddb,daily report 13/06/2026,siddhesh.edujam@gmail.com,Siddhesh,2026-06-13T13:36:49,SUCCESS,Sales,Siddhesh,13-06-2026,,0.43
+2026-06-13 14:59:53,19ec131710139da7,Daily report,ruwaida.hredujam@gmail.com,Ruwaida,2026-06-13T13:34:49,SUCCESS,HR,Ruwaida,13-06-2026,,2.13
+2026-06-13 14:59:53,19ec12e71fc5828f,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-06-13T13:31:34,SUCCESS,HR,Salomi,13-06-2026,,0.25
+2026-06-13 14:59:53,19ec0dacd1ebcc66,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-06-13T12:00:11,SUCCESS,HR,Mehvish,13-06-2026,,0.27
