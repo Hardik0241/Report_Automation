@@ -31,7 +31,7 @@ except Exception:
 SALES_EMPLOYEES = [
     "Apoorva", "Abhijit", "Sakib", "Jayesh",
     "Saif", "Rajesh", "Manasvi", "Praful", "Sachin", "Aishwary",
-    "Supriya", "Sayli", "Dhanshree", "Muskan", "Siddhesh", "Pumita", "Ellias", "Faisal"
+    "Supriya", "Sayli", "Dhanshree", "Muskan", "Siddhesh", "Pumita", "Ellias", "Faisal", 
 ]
 
 HR_EMPLOYEES = [
