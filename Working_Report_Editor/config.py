@@ -31,7 +31,7 @@ except Exception:
 SALES_EMPLOYEES = [
     "Apoorva", "Abhijit", "Sakib", "Jayesh",
     "Saif", "Rajesh", "Manasvi", "Praful", "Sachin", "Aishwary",
-    "Supriya", "Sayli", "Dhanshree", "Muskan", "Komal", "Siddhesh",
+    "Supriya", "Sayli", "Dhanshree", "Muskan", "Siddhesh", "Pumita", "Ellias", "Faisal"
 ]
 
 HR_EMPLOYEES = [
@@ -56,8 +56,10 @@ SALES_EMAIL_MAP = {
     "saylip.edujam@gmail.com": "Sayli",
     "dhanshree.edujam@gmail.com": "Dhanshree",
     "muskan.edujam@gmail.com": "Muskan",
-    "komals.edujam@gmail.com": "Komal",
     "siddhesh.edujam@gmail.com": "Siddhesh",
+    "pumita.edujam@gmail.com": "Pumita",
+    "ellias.edujam@gmail.com": "Ellias", 
+    "faisalk.edujam@gmail.com": "Faisal"
 }
 
 HR_EMAIL_MAP = {
