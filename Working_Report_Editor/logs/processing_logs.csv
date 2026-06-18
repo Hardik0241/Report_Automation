@@ -17,3 +17,6 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-06-18 16:30:50,19edaef6af876670,Daily report,ruwaida.hredujam@gmail.com,Ruwaida,2026-06-18T13:32:49,SUCCESS,HR,Ruwaida,18-06-2026,,2.94
 2026-06-18 16:30:51,19edaeea70858a5d,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-06-18T13:32:00,SUCCESS,HR,Salomi,18-06-2026,,0.25
 2026-06-18 16:30:51,19edaee877fa9014,report,pumita.edujam@gmail.com,Pumita,2026-06-18T13:31:48,FAILED,Sales,Pumita,18-06-2026,"Missing required fields: Total Dialed, Total Connected",0.29
+2026-06-18 19:08:16,19edc00b949fab3c,Daily Report of 18-06-2026,dhanshree.edujam@gmail.com,Dhanshree,2026-06-18T18:31:20,SUCCESS,Sales,Dhanshree,18-06-2026,,6.43
+2026-06-18 19:08:21,19edafeaece73540,Daily Report of 18-06-2026,saylip.edujam@gmail.com,Sayli,2026-06-18T13:49:31,SUCCESS,Sales,Sayli,18-06-2026,,4.13
+2026-06-18 19:08:27,19edaee877fa9014,report,pumita.edujam@gmail.com,Pumita,2026-06-18T13:31:48,SUCCESS,Sales,Pumita,18-06-2026,,3.81
