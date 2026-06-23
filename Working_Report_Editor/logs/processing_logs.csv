@@ -32,3 +32,4 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-06-23 15:46:59,19ef4b15b3153bc1,Daily Report of 23-06-2026,saylip.edujam@gmail.com,Sayli,2026-06-23T13:35:09,FAILED,Sales,Sayli,23-06-2026,"Missing required fields: Total Dialed, Total Connected",0.24
 2026-06-23 15:46:59,19ef4adb671c2bdb,Daily report,ruwaida.hredujam@gmail.com,Ruwaida,2026-06-23T13:31:09,SUCCESS,HR,Ruwaida,23-06-2026,,0.23
 2026-06-23 15:46:59,19ef4acd7e2c3a09,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-06-23T13:30:13,SUCCESS,HR,Salomi,23-06-2026,,0.23
+2026-06-23 17:52:54,19ef4b15b3153bc1,Daily Report of 23-06-2026,saylip.edujam@gmail.com,Sayli,2026-06-23T13:35:09,SUCCESS,Sales,Sayli,23-06-2026,,5.99
