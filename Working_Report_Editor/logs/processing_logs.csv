@@ -44,3 +44,4 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-06-27 14:28:54,19f0948e52703909,27th June_Reports.!,ellias.edujam@gmail.com,Ellias,2026-06-27T13:33:08,FAILED,Sales,Ellias,27-06-2026,"Missing required fields: Total Dialed, Total Connected",0.24
 2026-06-27 14:28:54,19f0946833eab860,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-06-27T13:30:30,SUCCESS,HR,Amanpreet,27-06-2026,,0.23
 2026-06-27 15:50:04,19f0948e52703909,27th June_Reports.!,ellias.edujam@gmail.com,Ellias,2026-06-27T13:33:08,SUCCESS,Sales,Ellias,27-06-2026,,3.02
+2026-06-28 17:43:49,19f0f522b1b344bf,Daily Report of 26-06-2026,dhanshree.edujam@gmail.com,Dhanshree,2026-06-28T17:40:57,SUCCESS,Sales,Dhanshree,28-06-2026,,7.03
