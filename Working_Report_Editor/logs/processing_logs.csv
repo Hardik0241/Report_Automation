@@ -38,3 +38,17 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-06-30 17:23:49,19f1923f63d04913,30/06/26,muskan.edujam@gmail.com,Muskan,2026-06-30T15:26:40,SUCCESS,Sales,Muskan,30-06-2026,,7.81
 2026-06-30 17:23:54,19f18be9d6f86a3b,30th June_Reports.!,ellias.edujam@gmail.com,Ellias,2026-06-30T13:35:58,SUCCESS,Sales,Ellias,30-06-2026,,3.46
 2026-06-30 19:18:23,19f199c9c72de24a,Daily Report of 30-06-2026,dhanshree.edujam@gmail.com,Dhanshree,2026-06-30T17:38:27,SUCCESS,Sales,Dhanshree,30-06-2026,,4.26
+2026-07-01 15:40:25,19f1dff5ad714cbb,REPORT,aishwary.edujam@gmail.com,Aishwary,2026-07-01T14:04:45,SUCCESS,Sales,Aishwary,01-07-2026,,8.90
+2026-07-01 15:40:28,19f1dfb49ec250e2,report,abhijit.edujam@gmail.com,Abhijit,2026-07-01T14:00:20,SUCCESS,Sales,Abhijit,01-07-2026,,3.07
+2026-07-01 15:40:33,19f1df7da367540c,KRA Report,sakibs.edujam@gmail.com,Sakib,2026-07-01T13:56:19,SUCCESS,Sales,Sakib,01-07-2026,,4.39
+2026-07-01 15:40:41,19f1df7d167f04ab,Daily Report of 01-07-2026,rajeshp.edujam@gmail.com,Rajesh,2026-07-01T13:56:33,SUCCESS,Sales,Rajesh,01-07-2026,,8.02
+2026-07-01 15:40:44,19f1df56b9472523,Report - 01-07-2026,jayesha.edujam@gmail.com,Jayesh,2026-07-01T13:53:56,SUCCESS,Sales,Jayesh,01-07-2026,,3.50
+2026-07-01 15:40:47,19f1df1655540653,daily report,supriyav.edujam@gmail.com,Supriya,2026-07-01T13:49:28,SUCCESS,Sales,Supriya,01-07-2026,,2.48
+2026-07-01 15:40:47,19f1de95791fde63,Daily Report of 29-06-2026,manasvi.edujam@gmail.com,Manasvi,2026-07-01T13:40:43,SUCCESS,Sales,Manasvi,01-07-2026,,0.39
+2026-07-01 15:40:50,19f1de7caba64cda,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-07-01T13:39:04,SUCCESS,HR,Amanpreet,01-07-2026,,2.82
+2026-07-01 15:40:50,19f1de4ca72267e5,1st July_Reports.!,ellias.edujam@gmail.com,Ellias,2026-07-01T13:35:48,SUCCESS,Sales,Ellias,01-07-2026,,0.40
+2026-07-01 15:40:51,19f1de49e8b37f17,Daily Report of 01-07-2026,saylip.edujam@gmail.com,Sayli,2026-07-01T13:35:35,FAILED,Sales,Sayli,01-07-2026,"Missing required fields: Total Dialed, Total Connected",0.27
+2026-07-01 15:40:51,19f1de45dad2e26b,Daily Report of 1-07-2026,apoorva.edujam@gmail.com,Apoorva,2026-07-01T13:35:14,SUCCESS,Sales,Apoorva,01-07-2026,,0.39
+2026-07-01 15:40:51,19f1de088682f708,Daily report 01/07/2026,siddhesh.edujam@gmail.com,Siddhesh,2026-07-01T13:31:08,SUCCESS,Sales,Siddhesh,01-07-2026,,0.39
+2026-07-01 15:40:52,19f1de083b59e7de,Daily Report,salomi.hredujam@gmail.com,Salomi,2026-07-01T13:31:06,SUCCESS,HR,Salomi,01-07-2026,,0.25
+2026-07-01 15:40:52,19f1de07e00c0510,Daily Report of 01-07-2026,sachingodara.edujam@gmail.com,Sachin,2026-07-01T13:31:04,SUCCESS,Sales,Sachin,01-07-2026,,0.44
