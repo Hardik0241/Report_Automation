@@ -35,7 +35,7 @@ SALES_EMPLOYEES = [
 ]
 
 HR_EMPLOYEES = [
-    "Ruwaida", "Amanpreet", "Mehvish", "Salomi",
+    "Ruwaida", "Amanpreet", "Mehvish", "Salomi", "Sakshi",
 ]
 
 # ============================================================
@@ -67,6 +67,7 @@ HR_EMAIL_MAP = {
     "amanpreet.hredujam@gmail.com": "Amanpreet",
     "mehvish.hredujam@gmail.com": "Mehvish",
     "salomi.hredujam@gmail.com": "Salomi",
+    "sakshi.hredujam@gmail.com": "Sakshi",
 }
 
 # ============================================================
