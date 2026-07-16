@@ -59,7 +59,7 @@ SALES_EMAIL_MAP = {
     "muskan.edujam@gmail.com": "Muskan",
     "ellias.edujam@gmail.com": "Ellias", 
     "faisalk.edujam@gmail.com": "Faisal",
-    "siddhesh.edujam@gmail.com": "Siddhesh",
+    "siddheshg.edujam@gmail.com": "Siddhesh",
     "chaitrali.edujam@gmail.com": "Chaitrali",
     "ahleem.edujam@gmail.com": "Ahleem",
     
