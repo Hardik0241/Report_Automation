@@ -3,6 +3,7 @@ sheets_service.py — Google Sheets operations with Calibri font, size 13, cente
 Handles: Not Sent, actual data
 Formatting: Dark black text (#000000), All borders on data cells
 UPDATED: Fixed write_batch() to properly clear "Not Sent" status when data is written
+UPDATED: Supports writing "Not Sent" status for late Sales submissions
 """
 
 import logging
@@ -236,6 +237,7 @@ class SheetsService:
         return ws
 
     def mark_all_as_not_sent(self, department: str, date_str: str) -> None:
+        """Mark employees as 'Not Sent' ONLY if they have NO data in other columns"""
         if department != "Sales":
             return
         
@@ -363,6 +365,7 @@ class SheetsService:
             if status_col:
                 report_status = data.get("report_status", "")
                 cell_updates[status_col] = report_status
+                logger.info(f"Setting status for row {row_number} to '{report_status}'")
             
             if not cell_updates:
                 continue
