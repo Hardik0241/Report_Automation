@@ -5,13 +5,13 @@ env:
 
 on:
   schedule:
-    # UPDATED: Active window changed to 3:00 PM to 09:00 PM IST
+    # UPDATED: Active window 3:00 PM to 09:00 PM IST
     # UTC is 5 hours 30 minutes behind IST
     # IST 3:00 PM = UTC 09:30
-    # IST 08:30 PM = UTC 15:00 (last run before deadline)
-    - cron: '30 9-14 * * *'   # Every 30 min from 09:30 UTC to 14:30 UTC (3:00 PM to 8:00 PM IST)
-    # Final run at 15:00 UTC (8:30 PM IST) - just before 9:00 PM deadline
-    - cron: '0 15 * * *'      # 8:30 PM IST
+    # IST 8:30 PM = UTC 15:00
+    # IST 9:00 PM = UTC 15:30 (FINAL RUN AT DEADLINE)
+    - cron: '30 9-14 * * *'   # Every 30 min from 09:30 UTC to 14:30 UTC (3:00 PM to 8:30 PM IST)
+    - cron: '30 15 * * *'     # FINAL RUN at 15:30 UTC (9:00 PM IST - DEADLINE)
   workflow_dispatch:
 
 jobs:
