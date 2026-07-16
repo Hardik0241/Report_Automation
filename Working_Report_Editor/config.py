@@ -89,18 +89,19 @@ GMAIL_QUERY = f"({FROM_QUERY}) is:unread"
 MAX_EMAILS_PER_RUN = 20
 
 # ============================================================
-# SALES DEADLINE RULE
+# SALES DEADLINE RULE - 09:00 PM IST
 # ============================================================
-SALES_CUTOFF_HOUR = 0
-SALES_CUTOFF_MINUTE = 0
+SALES_DEADLINE_HOUR = 21    # 09:00 PM
+SALES_DEADLINE_MINUTE = 0
 
 # ============================================================
-# SCHEDULER ACTIVE WINDOW
+# SCHEDULER ACTIVE WINDOW - 3:00 PM to 09:00 PM IST
 # ============================================================
-ACTIVE_START_HOUR = 19    # 7:00 PM
+# UPDATED: Active window changed from 7:00 PM - 11:59 PM to 3:00 PM - 09:00 PM
+ACTIVE_START_HOUR = 15      # 3:00 PM
 ACTIVE_START_MINUTE = 0
-ACTIVE_END_HOUR = 23      # 11:59 PM
-ACTIVE_END_MINUTE = 59
+ACTIVE_END_HOUR = 21        # 09:00 PM
+ACTIVE_END_MINUTE = 0
 
 # ============================================================
 # GOOGLE SHEETS CONFIGURATION
