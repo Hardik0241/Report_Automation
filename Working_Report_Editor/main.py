@@ -4,6 +4,8 @@ Always writes email body values.
 Duplicate check is FIRST to prevent re-processing same email.
 NOW WITH: Sheet check before processing to prevent duplicate writes
 UPDATED: Removed ALL status messages from Report Status column (always blank except Not Sent)
+UPDATED: Added logic to mark Sales employees as "Not Sent" if they submit after 09:00 PM IST
+UPDATED: HR employees are NOT subject to the 09:00 PM deadline rule
 """
 
 import logging
@@ -13,6 +15,7 @@ from typing import Dict, List, Optional, Tuple
 
 from config import (
     HR_EMAIL_MAP, HR_EMPLOYEES, SALES_EMAIL_MAP, SALES_EMPLOYEES,
+    SALES_DEADLINE_HOUR, SALES_DEADLINE_MINUTE,
 )
 from error_handler import BaseProcessingError, log_error
 from gmail_reader import GmailReader
@@ -97,6 +100,17 @@ class ReportProcessor:
             logger.warning(f"Error comparing dates: {e}")
             return False
 
+    def _is_after_sales_deadline(self, received_time: datetime) -> bool:
+        """Check if the received time is after the Sales deadline (09:00 PM IST)"""
+        hour = received_time.hour
+        minute = received_time.minute
+        
+        if hour > SALES_DEADLINE_HOUR:
+            return True
+        elif hour == SALES_DEADLINE_HOUR and minute >= SALES_DEADLINE_MINUTE:
+            return True
+        return False
+
     def _mark_all_as_not_sent_for_date(self, dept: str, date_str: str) -> None:
         key = f"{dept}_{date_str}"
         if key in ReportProcessor._date_marked_not_sent:
@@ -180,8 +194,21 @@ class ReportProcessor:
             if not ok:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
-            # IMPORTANT: ALWAYS set status to blank - no messages ever
-            email_data["report_status"] = ""
+            # UPDATED: Set status based on department and submission time
+            report_status = ""
+            
+            # Only apply deadline rule to Sales department
+            if dept == "Sales":
+                if self._is_after_sales_deadline(received_at):
+                    report_status = "Not Sent"
+                    logger.info(f"⚠️ Sales employee {canonical_name} submitted after {SALES_DEADLINE_HOUR:02d}:00 - marked as 'Not Sent'")
+                else:
+                    report_status = ""
+            else:
+                # HR department - always blank
+                report_status = ""
+
+            email_data["report_status"] = report_status
 
             self.sheets.ensure_date_for_all_employees(dept, date_str)
             self.sheets.ensure_status_column(dept, date_str)
