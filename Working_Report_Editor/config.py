@@ -87,7 +87,7 @@ GMAIL_QUERY = f"({FROM_QUERY}) is:unread"
 # ============================================================
 # MAX EMAILS PER RUN - Process ALL emails
 # ============================================================
-MAX_EMAILS_PER_RUN = 20
+MAX_EMAILS_PER_RUN = 30
 
 # ============================================================
 # SALES DEADLINE RULE - 09:00 PM IST
