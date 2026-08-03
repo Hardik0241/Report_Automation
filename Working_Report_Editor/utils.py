@@ -5,6 +5,7 @@ UPDATED: Added dot-separated duration format (HH.MM.SS)
 UPDATED: Added support for single-digit seconds format (HH:MM:M) - e.g., 01:28:0
 UPDATED: Added support for "sec" as seconds identifier (e.g., 8sec, 42m 8sec)
 UPDATED: Added support for single-digit hour with dots (H.MM.SS) - e.g., 2.08.32
+UPDATED: Added support for "min" as minutes identifier (e.g., 1hr 25min 46s)
 UPDATED: Fixed duration parsing for addition patterns like "+7 minutes", "+10 min", "also add 10 min"
 """
 
@@ -80,6 +81,7 @@ def parse_duration(raw: str) -> str:
     - "2.08.32" → 02:08:32 (single digit hour with dots)
     - "01:28:0" → 01:28:00 (single digit seconds)
     - "1h 42m 8sec" → 01:42:08 (sec as seconds)
+    - "1hr 25min 46s" → 01:25:46 (min as minutes)
     - "1H 1M + 20 M, Also add 10 min" → 01:31:00
     """
     if not raw:
@@ -210,6 +212,27 @@ def _duration_to_seconds(duration_str: str) -> int:
     if match:
         h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
         total_seconds += h * 3600 + m * 60 + s
+        return total_seconds
+    
+    # NEW: Handle duration with "min" as minutes identifier (e.g., 1hr 25min 46s)
+    # Pattern for "Xhr Ymin Zs"
+    match = re.search(r'(\d+)\s*hr\s*(\d+)\s*min\s*(\d+)\s*s', duration_str, re.IGNORECASE)
+    if match:
+        h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        total_seconds += h * 3600 + m * 60 + s
+        return total_seconds
+    
+    # Pattern for "Ymin Zs" (no hours)
+    match = re.search(r'(\d+)\s*min\s*(\d+)\s*s', duration_str, re.IGNORECASE)
+    if match:
+        m, s = int(match.group(1)), int(match.group(2))
+        total_seconds += m * 60 + s
+        return total_seconds
+    
+    # Pattern for just "Zmin" (only minutes)
+    match = re.search(r'(\d+)\s*min', duration_str, re.IGNORECASE)
+    if match:
+        total_seconds += int(match.group(1)) * 60
         return total_seconds
     
     # Pattern for "Ym Zsec" (no hours)
