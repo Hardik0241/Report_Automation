@@ -6,6 +6,7 @@ UPDATED: Added support for "sec" as seconds identifier (e.g., 8sec, 42m 8sec)
 UPDATED: Added support for "total dialled" (double L) spelling variation
 UPDATED: Added support for "Connect" without "ed" (e.g., Connect:- 74)
 UPDATED: Added support for "1hr" format (e.g., 1hr 14m 21s)
+UPDATED: Added "Connect" with capital C to keywords list for better matching
 UPDATED: Improved HR patterns for "Today held-0" and "Total Line ups for tomorrow -0"
 UPDATED: Improved call number extraction precision
 """
@@ -289,10 +290,13 @@ class GeminiParser:
                 "total dial", "total dials", "total dialed", "total dialled",
                 "total calls", "calls made", "dials", "dial"
             ])
+            
+            # UPDATED: Added more variations for "Connect" to handle case sensitivity
             total_connected = grab_number([
                 "total connected", "connected calls", "connected", 
-                "conn", "connect"
+                "conn", "connect", "Connect"
             ])
+            
             prospect = grab_number([
                 "prospect", "prospects", "pros"
             ])
