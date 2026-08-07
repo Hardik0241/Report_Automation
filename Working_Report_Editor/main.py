@@ -6,10 +6,12 @@ NOW WITH: Sheet check before processing to prevent duplicate writes
 UPDATED: Removed ALL status messages from Report Status column (always blank except Not Sent)
 UPDATED: Added logic to mark Sales employees as "Not Sent" if they submit after 09:00 PM IST
 UPDATED: HR employees are NOT subject to the 09:00 PM deadline rule
+UPDATED: Added graceful error handling for Sheets connection failures
 """
 
 import logging
 import time
+import sys
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -47,10 +49,23 @@ class ReportProcessor:
     def __init__(self):
         print("DEBUG: Initialising ReportProcessor", flush=True)
         logger.info("Initialising ReportProcessor...")
+        
+        # UPDATED: Graceful handling of Sheets connection failures
+        try:
+            self.sheets = SheetsService()
+        except Exception as e:
+            logger.error(f"❌ Failed to connect to Google Sheets: {e}")
+            logger.error("⚠️ The workflow will exit with failure. Please check:")
+            logger.error("   1. Google Sheets API is enabled")
+            logger.error("   2. Service account has access to both spreadsheets")
+            logger.error("   3. Google Sheets is not experiencing an outage")
+            logger.error("   4. SPREADSHEET_IDs are correct in secrets")
+            # Exit with error code so GitHub Actions knows it failed
+            sys.exit(1)
+        
         self.gmail = GmailReader()
         self.parser = GeminiParser()
         self.vision = VisionParser()
-        self.sheets = SheetsService()
         self.tracker = Tracker()
         self.validator = DataValidator()
         self._write_buffer: Dict[Tuple[str, str], List[Tuple[int, Dict]]] = {}
