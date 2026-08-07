@@ -18,6 +18,12 @@ jobs:
   run-processor:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    
+    # UPDATED: Add retry strategy for transient failures (503 errors, network issues)
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      retry: 3  # Retry up to 3 times if job fails
 
     steps:
       - name: Checkout code
