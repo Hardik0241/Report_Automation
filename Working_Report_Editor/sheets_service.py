@@ -4,12 +4,15 @@ Handles: Not Sent, actual data
 Formatting: Dark black text (#000000), All borders on data cells
 UPDATED: Fixed write_batch() to properly clear "Not Sent" status when data is written
 UPDATED: Supports writing "Not Sent" status for late Sales submissions
+UPDATED: Added retry logic with exponential backoff for connection failures (503 errors)
+UPDATED: Added timeout to prevent hanging
 """
 
 import logging
 import json
 import os
 import re
+import time
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -50,15 +53,81 @@ def _get_credentials():
 
 
 def _get_gspread_client() -> gspread.Client:
-    return gspread.authorize(_get_credentials())
+    client = gspread.authorize(_get_credentials())
+    # Set timeout to prevent hanging on slow connections
+    client.timeout = 30
+    return client
+
+
+def _connect_with_retry(max_retries: int = 5, initial_delay: int = 2) -> Tuple[gspread.Client, object, object]:
+    """
+    Attempt to connect to Google Sheets with retry logic for 503 errors.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay in seconds (doubles each retry)
+    
+    Returns:
+        Tuple of (client, sales_ss, hr_ss)
+    """
+    last_error = None
+    
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"🔄 Connecting to Google Sheets (attempt {attempt + 1}/{max_retries})...")
+            
+            client = _get_gspread_client()
+            
+            # Try to open both spreadsheets
+            sales_ss = client.open_by_key(SALES_SPREADSHEET_ID)
+            hr_ss = client.open_by_key(HR_SPREADSHEET_ID)
+            
+            # Verify connection by fetching spreadsheet titles
+            sales_title = sales_ss.title
+            hr_title = hr_ss.title
+            
+            logger.info(f"✅ Successfully connected to Sales spreadsheet: '{sales_title}'")
+            logger.info(f"✅ Successfully connected to HR spreadsheet: '{hr_title}'")
+            
+            return client, sales_ss, hr_ss
+            
+        except Exception as e:
+            last_error = e
+            error_msg = str(e)
+            
+            # Check if this is a 503 error or connection issue
+            is_503 = "503" in error_msg or "unavailable" in error_msg.lower()
+            is_connection = "connection" in error_msg.lower() or "timeout" in error_msg.lower()
+            
+            if is_503 or is_connection:
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)  # Exponential backoff
+                    logger.warning(f"⚠️ Google Sheets {'503 (unavailable)' if is_503 else 'connection'} error (attempt {attempt + 1})")
+                    logger.info(f"⏳ Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"❌ Failed to connect after {max_retries} attempts")
+                    break
+            else:
+                # Non-retryable error
+                logger.error(f"❌ Non-retryable error: {e}")
+                break
+    
+    # If we get here, all retries failed
+    raise Exception(f"Failed to connect to Google Sheets after {max_retries} attempts. Last error: {last_error}")
 
 
 class SheetsService:
     def __init__(self):
-        client = _get_gspread_client()
-        self._sales_ss = client.open_by_key(SALES_SPREADSHEET_ID)
-        self._hr_ss = client.open_by_key(HR_SPREADSHEET_ID)
-        logger.info("Connected to Sales and HR spreadsheets")
+        # Use retry logic for connection
+        client, sales_ss, hr_ss = _connect_with_retry()
+        
+        self._sales_ss = sales_ss
+        self._hr_ss = hr_ss
+        self._client = client
+        
+        logger.info("✅ Connected to Sales and HR spreadsheets")
         self._emp_cache: Dict[Tuple[str, str], Dict[str, int]] = {}
         self._ws_cache: Dict[Tuple[str, str], gspread.Worksheet] = {}
         self._worksheet_data_cache: Dict[Tuple[str, str], List[List[str]]] = {}
