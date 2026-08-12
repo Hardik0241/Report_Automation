@@ -7,6 +7,7 @@ UPDATED: Added support for "total dialled" (double L) spelling variation
 UPDATED: Added support for "Connect" without "ed" (e.g., Connect:- 74)
 UPDATED: Added support for "1hr" format (e.g., 1hr 14m 21s)
 UPDATED: Added support for "min" as minutes identifier (e.g., 1hr 25min 46s)
+UPDATED: Added support for "MINS" and "SEC" uppercase full words (e.g., 49 MINS 9 SEC)
 UPDATED: Added support for singular "Lineup" pattern (e.g., Lineup for tomorrow-2)
 UPDATED: Added "Connect" with capital C to keywords list for better matching
 UPDATED: Improved HR patterns for "Today held-0" and "Total Line ups for tomorrow -0"
@@ -75,7 +76,7 @@ Rules:
 - Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
 - If the email contains "Leave" or "leave" anywhere, mark as "Leave" and skip.
-- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "2.08.32", "1h 42m 8sec", "1hr 14m 21s", "1hr 25min 46s"
+- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "2.08.32", "1h 42m 8sec", "1hr 14m 21s", "1hr 25min 46s", "49 MINS 9 SEC"
 
 Email content:
 """
@@ -275,6 +276,12 @@ class GeminiParser:
                 if match:
                     return match.group(1).strip()
                 
+                # NEW: Handle "49 MINS 9 SEC" format (uppercase full words)
+                pattern_mins_sec = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*MINS?\s*\d+\s*SEC)"
+                match = re.search(pattern_mins_sec, text)
+                if match:
+                    return match.group(1).strip()
+                
                 # Handle text format with "hr" (e.g., 1hr 14m 21s)
                 pattern_text_hr = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*hr\s*\d+\s*m\s*\d+\s*s)"
                 match = re.search(pattern_text_hr, text)
@@ -461,7 +468,13 @@ class GeminiParser:
             s = int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
         
-        # Handle "1hr 25min 46s" format (NEW)
+        # NEW: Handle "49 MINS 9 SEC" format (uppercase full words)
+        match = re.search(r'(\d+)\s*MINS?\s*(\d+)\s*SEC', text, re.IGNORECASE)
+        if match:
+            m, s = int(match.group(1)), int(match.group(2))
+            return f"00:{m:02d}:{s:02d}"
+        
+        # Handle "1hr 25min 46s" format
         match = re.search(r'(\d+)\s*hr\s*(\d+)\s*min\s*(\d+)\s*s', text, re.IGNORECASE)
         if match:
             h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
