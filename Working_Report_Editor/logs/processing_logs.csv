@@ -24,3 +24,18 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-08-13 15:33:32,19ffb70a3ceee060,Daily Report of 08-013-2026,apoorva.edujam@gmail.com,Apoorva,2026-08-13T14:04:34,SUCCESS,Sales,Apoorva,13-08-2026,,0.30
 2026-08-13 15:33:32,19ffb6c585f32a51,Daily Report of 13-08-2026,sachingodara.edujam@gmail.com,Sachin,2026-08-13T13:59:55,SUCCESS,Sales,Sachin,13-08-2026,,0.31
 2026-08-13 15:33:33,19ffb6c2ff549a80,kar (13/8/2026),faisalk.edujam@gmail.com,Faisal,2026-08-13T13:59:45,SUCCESS,Sales,Faisal,13-08-2026,,0.34
+2026-08-14 13:54:39,1a000850e672e9b6,Report - 14-08-2026,jayesha.edujam@gmail.com,Jayesh,2026-08-14T13:45:00,SUCCESS,Sales,Jayesh,14-08-2026,,10.86
+2026-08-14 13:54:42,1a0007f4196f25a8,Daily Report of 14-08-2026,saylip.edujam@gmail.com,Sayli,2026-08-14T13:38:41,SUCCESS,Sales,Sayli,14-08-2026,,2.48
+2026-08-14 13:54:49,1a0007eba5c27545,Daily report,ruwaida.hredujam@gmail.com,Ruwaida,2026-08-14T13:38:09,SUCCESS,HR,Ruwaida,14-08-2026,,7.62
+2026-08-14 13:54:52,1a0007d073ade6b1,Daily Report,supriyav.edujam@gmail.com,Supriya,2026-08-14T13:35:00,SUCCESS,Sales,Supriya,14-08-2026,,2.87
+2026-08-14 13:54:56,1a0007cc4243c450,Report- 14 August 2026,simrand.edujam@gmail.com,Simran,2026-08-14T13:35:58,SUCCESS,Sales,Simran,14-08-2026,,3.63
+2026-08-14 13:54:58,1a0007cb664a7b28,Calling Report,prafulp.edujam@gmail.com,Praful,2026-08-14T13:35:54,SUCCESS,Sales,Praful,14-08-2026,,2.47
+2026-08-14 13:54:59,1a0007be733f6a4f,Daily Report of 14-08-2026,sachingodara.edujam@gmail.com,Sachin,2026-08-14T13:34:58,SUCCESS,Sales,Sachin,14-08-2026,,0.45
+2026-08-14 13:54:59,1a0007b679359ee9,KRA (14/8/26),faisalk.edujam@gmail.com,Faisal,2026-08-14T13:34:27,SUCCESS,Sales,Faisal,14-08-2026,,0.47
+2026-08-14 13:55:00,1a0007adb5e2039b,14th_August_Reports.!,ellias.edujam@gmail.com,Ellias,2026-08-14T13:33:54,FAILED,Sales,Ellias,14-08-2026,"Missing required fields: Total Dialed, Total Connected",0.26
+2026-08-14 13:55:00,1a000785a371b7ca,REPORT,ishas.edujam@gmail.com,Isha,2026-08-14T13:31:07,SUCCESS,Sales,Isha,14-08-2026,,0.46
+2026-08-14 13:55:01,1a000785967ba83a,Daily Report of 14.08.2026,manasvi.edujam@gmail.com,Manasvi,2026-08-14T13:31:08,SUCCESS,Sales,Manasvi,14-08-2026,,0.47
+2026-08-14 13:55:01,1a00077f6d74466a,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-08-14T13:30:44,SUCCESS,HR,Mehvish,14-08-2026,,0.25
+2026-08-14 13:55:01,1a00077a7befb53c,Daily Report,sakshi.hredujam@gmail.com,Sakshi,2026-08-14T13:30:24,SUCCESS,HR,Sakshi,14-08-2026,,0.23
+2026-08-14 13:55:01,1a00077609b46c9f,REPORT,saifd.edujam@gmail.com,Saif,2026-08-14T13:30:04,SUCCESS,Sales,Saif,14-08-2026,,0.46
+2026-08-14 13:55:02,1a000775ef82dfb8,Daily Report,amanpreet.hredujam@gmail.com,Amanpreet,2026-08-14T13:30:03,SUCCESS,HR,Amanpreet,14-08-2026,,0.23
