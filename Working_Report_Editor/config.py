@@ -65,8 +65,6 @@ SALES_EMAIL_MAP = {
     "farhatnaaz.edujam@gmail.com": "Farhatnaaz",
     "ishas.edujam@gmail.com": "Isha",
     "simrand.edujam@gmail.com": "Simran",
-    
-    
 }
 
 HR_EMAIL_MAP = {
@@ -100,7 +98,6 @@ SALES_DEADLINE_MINUTE = 0
 # ============================================================
 # SCHEDULER ACTIVE WINDOW - 3:00 PM to 09:00 PM IST
 # ============================================================
-# UPDATED: Active window changed from 7:00 PM - 11:59 PM to 3:00 PM - 09:00 PM
 ACTIVE_START_HOUR = 15      # 3:00 PM
 ACTIVE_START_MINUTE = 0
 ACTIVE_END_HOUR = 21        # 09:00 PM
@@ -166,7 +163,7 @@ VALIDATION_RULES = {
 }
 
 DEPARTMENT_KEYWORDS = {
-    "Sales": ["sales", "callyzer", "dialer", "prospect", "dialed", "dial", "outgoing"],
+    "Sales": ["sales", "callyzer", "dialer", "prospect", "dialed", "dial", "outgoing", "dails"],
     "HR": ["hr", "recruitment", "interview", "hiring", "lineup"],
 }
 
