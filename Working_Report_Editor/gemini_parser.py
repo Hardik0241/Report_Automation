@@ -12,6 +12,8 @@ UPDATED: Added support for singular "Lineup" pattern (e.g., Lineup for tomorrow-
 UPDATED: Added "Connect" with capital C to keywords list for better matching
 UPDATED: Improved HR patterns for "Today held-0" and "Total Line ups for tomorrow -0"
 UPDATED: Improved call number extraction precision
+UPDATED: Added support for "total dails" typo
+UPDATED: Improved "sec" pattern matching for duration extraction
 """
 
 import json
@@ -39,7 +41,7 @@ Return ONLY a JSON object — no markdown, no explanation.
 IMPORTANT: First determine if this is a SALES or HR report based on content.
 
 For a SALES report, look for:
-- "total dialed", "total dial", "total dialled", "dials", "total calls", "calls made", "dial"
+- "total dialed", "total dial", "total dialled", "total dails", "dials", "total calls", "calls made", "dial"
 - "connected", "conn", "total connected", "connected calls", "connect"  
 - "duration", "dur", "talk time", "time"
 - "prospect", "prospects", "pros"
@@ -76,7 +78,7 @@ Rules:
 - Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
 - If the email contains "Leave" or "leave" anywhere, mark as "Leave" and skip.
-- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "2.08.32", "1h 42m 8sec", "1hr 14m 21s", "1hr 25min 46s", "49 MINS 9 SEC"
+- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "2.08.32", "1h 42m 8sec", "1hr 14m 21s", "1hr 25min 46s", "49 MINS 9 SEC", "2h 11m 31sec"
 
 Email content:
 """
@@ -183,7 +185,7 @@ class GeminiParser:
                 return "HR"
         
         sales_keywords = [
-            "sales", "dialer", "prospect", "dialed", "dial", "dialled",
+            "sales", "dialer", "prospect", "dialed", "dial", "dialled", "dails",
             "outgoing", "total dialed", "total connected", "connected calls", 
             "duration", "total dial", "total calls", "calls made",
             "bde", "bde name", "bde -", "prospects"
@@ -264,7 +266,13 @@ class GeminiParser:
                 if match:
                     return match.group(1)
                 
-                # Handle text format with "sec" (e.g., 1h 42m 8sec)
+                # Handle MM:SS format (e.g., 58:14)
+                pattern_mm_ss = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}:\d{{2}})"
+                match = re.search(pattern_mm_ss, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # Handle text format with "sec" (e.g., 2h 11m 31sec)
                 pattern_text_sec = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*h(?:r)?s?\s*\d+\s*m(?:in)?s?\s*\d+\s*sec)"
                 match = re.search(pattern_text_sec, text)
                 if match:
@@ -276,7 +284,13 @@ class GeminiParser:
                 if match:
                     return match.group(1).strip()
                 
-                # NEW: Handle "49 MINS 9 SEC" format (uppercase full words)
+                # Handle "1hr 9min 47sec" format (full words with spaces)
+                pattern_hr_min_sec = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*hr\s*\d+\s*min\s*\d+\s*sec)"
+                match = re.search(pattern_hr_min_sec, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # Handle "49 MINS 9 SEC" format (uppercase full words)
                 pattern_mins_sec = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*MINS?\s*\d+\s*SEC)"
                 match = re.search(pattern_mins_sec, text)
                 if match:
@@ -302,11 +316,10 @@ class GeminiParser:
 
         if dept == "Sales":
             total_dialed = grab_number([
-                "total dial", "total dials", "total dialed", "total dialled",
+                "total dial", "total dials", "total dialed", "total dialled", "total dails",
                 "total calls", "calls made", "dials", "dial"
             ])
             
-            # UPDATED: Added more variations for "Connect" to handle case sensitivity
             total_connected = grab_number([
                 "total connected", "connected calls", "connected", 
                 "conn", "connect", "Connect"
@@ -345,8 +358,6 @@ class GeminiParser:
             if duration and duration != "00:00:00" and ':' not in duration and '.' not in duration:
                 duration = parse_duration(duration)
             
-            # UPDATED: HR Lineups extraction with more flexible patterns
-            # Added support for singular "Lineup for tomorrow-2"
             lineups = 0
             lineup_patterns = [
                 r"(?i)total[\s]+line[\s]+ups?[\s]+for[\s]+tomorrow[\s]*[-:][\s]*(\d+)",
@@ -357,7 +368,6 @@ class GeminiParser:
                 r"(?i)total line ups? for tomorrow[\s]*[-:]?\s*(\d+)",
                 r"(?i)lineups?[\s]*:[\s]*(\d+)",
                 r"(?i)total[\s]+line[\s]+ups?[\s]+for[\s]+tomorrow[\s]*-\s*(\d+)",
-                # NEW: Singular "Lineup for tomorrow-2" (no space, no 's')
                 r"(?i)lineup[\s]+for[\s]+tomorrow[\s]*[-:][\s]*(\d+)",
                 r"(?i)lineup[\s]+for[\s]+tomorrow[\s]*-\s*(\d+)",
             ]
@@ -368,7 +378,6 @@ class GeminiParser:
                     logger.info(f"HR Lineups extracted: {lineups} using pattern: {pattern}")
                     break
             
-            # UPDATED: HR Interview Held extraction with more flexible patterns
             held = 0
             held_patterns = [
                 r"(?i)today[\s]+held[\s]*-[\s]*(\d+)",
@@ -454,6 +463,12 @@ class GeminiParser:
         if match:
             return match.group(0)
         
+        # Handle MM:SS format (e.g., 58:14)
+        match = re.search(r'(\d{2}):(\d{2})', text)
+        if match and text.count(':') == 1:
+            m, s = int(match.group(1)), int(match.group(2))
+            return f"00:{m:02d}:{s:02d}"
+        
         # Handle HH.MM.SS with two-digit hour
         match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', text)
         if match:
@@ -468,11 +483,23 @@ class GeminiParser:
             s = int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
         
-        # NEW: Handle "49 MINS 9 SEC" format (uppercase full words)
+        # Handle "49 MINS 9 SEC" format (uppercase full words)
         match = re.search(r'(\d+)\s*MINS?\s*(\d+)\s*SEC', text, re.IGNORECASE)
         if match:
             m, s = int(match.group(1)), int(match.group(2))
             return f"00:{m:02d}:{s:02d}"
+        
+        # Handle "2h 11m 31sec" format (sec as seconds)
+        match = re.search(r'(\d+)\s*h(?:r)?s?\s*(\d+)\s*m(?:in)?s?\s*(\d+)\s*sec', text, re.IGNORECASE)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        
+        # Handle "1hr 9min 47sec" format (full words with spaces)
+        match = re.search(r'(\d+)\s*hr\s*(\d+)\s*min\s*(\d+)\s*sec', text, re.IGNORECASE)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
         
         # Handle "1hr 25min 46s" format
         match = re.search(r'(\d+)\s*hr\s*(\d+)\s*min\s*(\d+)\s*s', text, re.IGNORECASE)
@@ -482,12 +509,6 @@ class GeminiParser:
         
         # Handle "1hr 14m 21s" format
         match = re.search(r'(\d+)\s*hr\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
-        if match:
-            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
-            return f"{h:02d}:{m:02d}:{s:02d}"
-        
-        # Handle "1h 42m 8sec" format
-        match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*sec', text, re.IGNORECASE)
         if match:
             h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
