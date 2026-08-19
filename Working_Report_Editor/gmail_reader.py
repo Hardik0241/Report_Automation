@@ -1,6 +1,7 @@
 """
 gmail_reader.py — Fetch unread emails from Gmail
 READ ONLY MODE - Emails stay UNREAD
+UPDATED: Added OAuth debug prints for troubleshooting
 """
 
 import base64
@@ -37,9 +38,18 @@ class GmailReader:
 
         import os
 
+        print("=== DEBUG: Checking OAuth Environment Variables ===")
+        print(f"CLIENT_ID exists: {bool(os.environ.get('CLIENT_ID', ''))}")
+        print(f"CLIENT_SECRET exists: {bool(os.environ.get('CLIENT_SECRET', ''))}")
+        print(f"REFRESH_TOKEN exists: {bool(os.environ.get('REFRESH_TOKEN', ''))}")
+
         refresh_token = os.environ.get("REFRESH_TOKEN", "")
         client_id = os.environ.get("CLIENT_ID", "")
         client_secret = os.environ.get("CLIENT_SECRET", "")
+
+        print(f"CLIENT_ID length: {len(client_id)}")
+        print(f"CLIENT_SECRET length: {len(client_secret)}")
+        print(f"REFRESH_TOKEN length: {len(refresh_token)}")
 
         if refresh_token and client_id and client_secret:
             self._oauth_creds = Credentials(
@@ -70,6 +80,7 @@ class GmailReader:
         except Exception:
             pass
 
+        print("❌ Missing OAuth credentials!")
         raise Exception("No OAuth credentials found")
 
     def _get_service(self):
