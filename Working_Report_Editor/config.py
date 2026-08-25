@@ -32,11 +32,11 @@ SALES_EMPLOYEES = [
     "Apoorva", "Abhijit", "Sakib", "Jayesh",
     "Saif", "Rajesh", "Manasvi", "Praful", "Sachin", "Aishwary",
     "Supriya", "Sayli", "Dhanshree", "Muskan", "Ellias", "Faisal",
-    "Akshata", "Chaitrali", "Ahleem", "Farhatnaaz", "Isha", "Simran",
+    "Akshata", "Ahleem", "Farhatnaaz", "Isha", "Simran",
 ]
 
 HR_EMPLOYEES = [
-    "Ruwaida", "Amanpreet", "Mehvish", "Sakshi",
+    "Ruwaida", "Mehvish", "Sakshi",
 ]
 
 # ============================================================
@@ -60,7 +60,6 @@ SALES_EMAIL_MAP = {
     "ellias.edujam@gmail.com": "Ellias", 
     "faisalk.edujam@gmail.com": "Faisal",
     "akshata.edujam@gmail.com": "Akshata",
-    "chaitrali.edujam@gmail.com": "Chaitrali",
     "ahleem.edujam@gmail.com": "Ahleem",
     "farhatnaaz.edujam@gmail.com": "Farhatnaaz",
     "ishas.edujam@gmail.com": "Isha",
@@ -69,7 +68,6 @@ SALES_EMAIL_MAP = {
 
 HR_EMAIL_MAP = {
     "ruwaida.hredujam@gmail.com": "Ruwaida",
-    "amanpreet.hredujam@gmail.com": "Amanpreet",
     "mehvish.hredujam@gmail.com": "Mehvish",
     "sakshi.hredujam@gmail.com": "Sakshi",
 }
