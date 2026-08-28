@@ -21,6 +21,7 @@ UPDATED: Added support for "hr" + "min" with spaces (e.g., 1hr 38 min 39s)
 UPDATED: Added support for "min" with spaces around it (e.g., 38 min)
 UPDATED: Added support for "min" without spaces (e.g., 39min 51s)
 UPDATED: Added support for "s" without spaces (e.g., 51s)
+UPDATED: REORDERED patterns in grab_duration() - FULL duration patterns checked FIRST, single-unit patterns LAST
 """
 
 import json
@@ -253,6 +254,10 @@ class GeminiParser:
             for kw in keywords:
                 kw_esc = re.escape(kw)
                 
+                # ============================================================
+                # PRIORITY 1: FULL DURATION PATTERNS (HOURS + MINUTES + SECONDS)
+                # ============================================================
+                
                 pattern_time = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}:\d{{2}}:\d{{2}})"
                 match = re.search(pattern_time, text)
                 if match:
@@ -272,30 +277,6 @@ class GeminiParser:
                 match = re.search(pattern_time_colon, text)
                 if match:
                     return match.group(1)
-                
-                # Handle MM:SS format (e.g., 58:14)
-                pattern_mm_ss = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}:\d{{2}})"
-                match = re.search(pattern_mm_ss, text)
-                if match:
-                    return match.group(1).strip()
-                
-                # Handle "39min 51s" format (min without space, s without space)
-                pattern_min_s = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*min\s*\d+\s*s)"
-                match = re.search(pattern_min_s, text)
-                if match:
-                    return match.group(1).strip()
-                
-                # Handle "39min" only (no seconds)
-                pattern_min_only = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*min)"
-                match = re.search(pattern_min_only, text)
-                if match:
-                    return match.group(1).strip()
-                
-                # Handle "51s" only (no minutes)
-                pattern_s_only = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*s)"
-                match = re.search(pattern_s_only, text)
-                if match:
-                    return match.group(1).strip()
                 
                 # Handle text format with "sec" (e.g., 1h 42m 8sec)
                 pattern_text_sec = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*h(?:r)?s?\s*\d+\s*m(?:in)?s?\s*\d+\s*sec)"
@@ -350,6 +331,42 @@ class GeminiParser:
                 match = re.search(pattern_text_hr, text)
                 if match:
                     return match.group(1).strip()
+                
+                # ============================================================
+                # PRIORITY 2: MINUTES + SECONDS (NO HOURS)
+                # ============================================================
+                
+                # Handle MM:SS format (e.g., 58:14)
+                pattern_mm_ss = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d{{2}}:\d{{2}})"
+                match = re.search(pattern_mm_ss, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # Handle "39min 51s" format (min without space, s without space)
+                pattern_min_s = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*min\s*\d+\s*s)"
+                match = re.search(pattern_min_s, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # ============================================================
+                # PRIORITY 3: SINGLE UNIT (MINUTES ONLY OR SECONDS ONLY)
+                # ============================================================
+                
+                # Handle "39min" only (no seconds)
+                pattern_min_only = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*min)"
+                match = re.search(pattern_min_only, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # Handle "51s" only (no minutes)
+                pattern_s_only = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*s)"
+                match = re.search(pattern_s_only, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # ============================================================
+                # PRIORITY 4: FALLBACK PATTERNS
+                # ============================================================
                 
                 pattern_text = rf"(?i){kw_esc}[\s]*[:=-][\s]*([\d\s]+[hms]+[\d\s]+[hms]*[\d\s]*[hms]*)"
                 match = re.search(pattern_text, text)
