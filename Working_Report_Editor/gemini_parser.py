@@ -1,5 +1,6 @@
 """
 gemini_parser.py — Parse email body into structured data using Gemini.
+BRANCH: THANE - Sales & HR (Both Departments)
 UPDATED: Fixed HR regex for "Total Line ups for tomorrow" (plural, dash, colon)
 UPDATED: Fixed duration extraction for HH:MM:SS format with dash and dots
 UPDATED: Added support for "sec" as seconds identifier (e.g., 8sec, 42m 8sec)
@@ -22,6 +23,9 @@ UPDATED: Added support for "min" with spaces around it (e.g., 38 min)
 UPDATED: Added support for "min" without spaces (e.g., 39min 51s)
 UPDATED: Added support for "s" without spaces (e.g., 51s)
 UPDATED: REORDERED patterns in grab_duration() - FULL duration patterns checked FIRST, single-unit patterns LAST
+UPDATED: Added support for no-space formats (e.g., 1h1m18s)
+UPDATED: Added support for minutes+seconds patterns (e.g., 6m 14s, 11m 13s)
+UPDATED: Updated _BASE_PROMPT to include all duration formats
 """
 
 import json
@@ -86,7 +90,7 @@ Rules:
 - Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
 - If the email contains "Leave" or "leave" anywhere, mark as "Leave" and skip.
-- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "2.08.32", "1h 42m 8sec", "1hr 14m 21s", "1hr 25min 46s", "49 MINS 9 SEC", "1hr 9min 47sec", "58:14", "1 hr 14m 18 secs + 13 mins + 6 mins", "1hr 38 min 39s", "39min 51s"
+- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "2.08.32", "1h 42m 8sec", "1hr 14m 21s", "1hr 25min 46s", "49 MINS 9 SEC", "1hr 9min 47sec", "58:14", "1 hr 14m 18 secs + 13 mins + 6 mins", "1hr 38 min 39s", "39min 51s", "1h1m18s", "6m 14s", "11m 13s", "00h 52m 3s", "2h 11m 31sec"
 
 Email content:
 """
@@ -332,8 +336,26 @@ class GeminiParser:
                 if match:
                     return match.group(1).strip()
                 
+                # Handle "1h1m18s" format (no spaces between components)
+                pattern_no_space = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*h(?:r)?\s*\d+\s*m(?:in)?\s*\d+\s*s(?:ec)?)"
+                match = re.search(pattern_no_space, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # Handle "00h 52m 3s" format (zero hour with spaces)
+                pattern_zero_hour = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*h(?:r)?\s*\d+\s*m(?:in)?\s*\d+\s*s)"
+                match = re.search(pattern_zero_hour, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # Handle "6m 14s" format (minutes + seconds, no hours)
+                pattern_min_s = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*m(?:in)?\s*\d+\s*s(?:ec)?)"
+                match = re.search(pattern_min_s, text)
+                if match:
+                    return match.group(1).strip()
+                
                 # ============================================================
-                # PRIORITY 2: MINUTES + SECONDS (NO HOURS)
+                # PRIORITY 2: MINUTES + SECONDS (NO HOURS) - FALLBACK
                 # ============================================================
                 
                 # Handle MM:SS format (e.g., 58:14)
@@ -343,8 +365,8 @@ class GeminiParser:
                     return match.group(1).strip()
                 
                 # Handle "39min 51s" format (min without space, s without space)
-                pattern_min_s = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*min\s*\d+\s*s)"
-                match = re.search(pattern_min_s, text)
+                pattern_min_s_fallback = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*min\s*\d+\s*s)"
+                match = re.search(pattern_min_s_fallback, text)
                 if match:
                     return match.group(1).strip()
                 
@@ -602,6 +624,18 @@ class GeminiParser:
         if match:
             h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
             return f"{h:02d}:{m:02d}:{s:02d}"
+        
+        # Handle "1h1m18s" format (no spaces between components)
+        match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m(?:in)?\s*(\d+)\s*s(?:ec)?', text, re.IGNORECASE)
+        if match:
+            h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{h:02d}:{m:02d}:{s:02d}"
+        
+        # Handle "6m 14s" format (minutes + seconds, no hours)
+        match = re.search(r'(\d+)\s*m(?:in)?\s*(\d+)\s*s(?:ec)?', text, re.IGNORECASE)
+        if match:
+            m, s = int(match.group(1)), int(match.group(2))
+            return f"00:{m:02d}:{s:02d}"
         
         match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
         if match:
