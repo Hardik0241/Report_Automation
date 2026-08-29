@@ -1,6 +1,6 @@
 """
 utils.py — Shared utility functions: date extraction, duration parsing, math handling
-BRANCH: THANE - Sales Only
+BRANCH: THANE - Sales & HR (Both Departments)
 UPDATED: Added support for text-based addition patterns (also add, add, plus)
 UPDATED: Added dot-separated duration format (HH.MM.SS)
 UPDATED: Added support for single-digit seconds format (HH:MM:M) - e.g., 01:28:0
@@ -24,6 +24,7 @@ UPDATED: Added support for no-space formats (e.g., 1h1m18s, 1h1m18sec)
 UPDATED: Added support for "00h" format (e.g., 00h 52m 3s)
 UPDATED: Added support for "sec" without spaces (e.g., 2h 11m 31sec)
 UPDATED: Added support for addition with "from other phone" pattern (e.g., 1 H + 10 minutes from other phone)
+UPDATED: REORDERED patterns - minutes+seconds (6m 14s) checked BEFORE just-seconds (14s)
 """
 
 import re
@@ -115,6 +116,8 @@ def parse_duration(raw: str) -> str:
     - "00h 52m 3s" → 00:52:03 (zero hour format)
     - "2h 11m 31sec" → 02:11:31 (sec without spaces)
     - "1 H + 10 minutes from other phone" → 01:10:00 (addition with text)
+    - "6m 14s" → 00:06:14 (minutes + seconds, no hours)
+    - "11m 13s" → 00:11:13 (minutes + seconds, no hours)
     """
     if not raw:
         return "00:00:00"
@@ -227,6 +230,12 @@ def parse_duration(raw: str) -> str:
     if match:
         h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
         return f"{h:02d}:{m:02d}:{s:02d}"
+    
+    # Handle "6m 14s" format (minutes + seconds, no hours)
+    match = re.search(r'(\d+)\s*m(?:in)?\s*(\d+)\s*s(?:ec)?', clean_raw, re.IGNORECASE)
+    if match:
+        m, s = int(match.group(1)), int(match.group(2))
+        return f"00:{m:02d}:{s:02d}"
     
     # Handle multiple durations with "+" and text additions (including "mins" plural)
     if '+' in clean_raw or re.search(r'(also add|add|plus|additional)', clean_raw, re.IGNORECASE):
@@ -359,8 +368,15 @@ def _duration_to_seconds(duration_str: str) -> int:
     
     # ============================================================
     # PRIORITY 2: MINUTES + SECONDS (NO HOURS)
-    # These must be checked BEFORE just-seconds patterns
+    # These must be checked BEFORE just-seconds patterns (like "14s")
     # ============================================================
+    
+    # Handle "6m 14s" format (minutes + seconds, no hours)
+    match = re.search(r'(\d+)\s*m(?:in)?\s*(\d+)\s*s(?:ec)?', duration_str, re.IGNORECASE)
+    if match:
+        m, s = int(match.group(1)), int(match.group(2))
+        total_seconds += m * 60 + s
+        return total_seconds
     
     # Handle "38m 58s" format (minutes + seconds, no hours)
     match = re.search(r'(\d+)\s*m(?:in)?s?\s*(\d+)\s*s(?:ec)?s?', duration_str, re.IGNORECASE)
