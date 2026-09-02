@@ -150,3 +150,14 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-09-02 13:48:43,1a0625366d5e2004,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-09-02T13:33:35,SUCCESS,HR,Mehvish,02-09-2026,,9.61
 2026-09-02 13:48:46,1a062505aded5a18,Daily Report,sakshi.hredujam@gmail.com,Sakshi,2026-09-02T13:30:12,SUCCESS,HR,Sakshi,02-09-2026,,3.57
 2026-09-02 13:48:47,1a061dd029749db3,Daily Report of 02.09.2026,manasvi.edujam@gmail.com,Manasvi,2026-09-02T11:24:14,SUCCESS,Sales,Manasvi,02-09-2026,,0.45
+2026-09-02 18:00:02,1a0628a5b28b606e,report,abhijit.edujam@gmail.com,Abhijit,2026-09-02T14:33:34,SUCCESS,Sales,Abhijit,02-09-2026,,10.98
+2026-09-02 18:00:03,1a062894c8f9eb21,Daily Report of 02-09-2026,sachingodara.edujam@gmail.com,Sachin,2026-09-02T14:32:26,SUCCESS,Sales,Sachin,02-09-2026,,0.45
+2026-09-02 18:00:03,1a062850888fc231,Calling Report,prafulp.edujam@gmail.com,Praful,2026-09-02T14:27:44,SUCCESS,Sales,Praful,02-09-2026,,0.46
+2026-09-02 18:00:04,1a06281982bd49a3,Daily Report of 02-09-2026,rajeshp.edujam@gmail.com,Rajesh,2026-09-02T14:24:02,SUCCESS,Sales,Rajesh,02-09-2026,,0.39
+2026-09-02 18:00:04,1a06276dfe333a7d,2/09/2026 kra report,saylip.edujam@gmail.com,Sayli,2026-09-02T14:12:20,FAILED,Sales,Sayli,02-09-2026,"Missing required fields: Total Dialed, Total Connected",0.26
+2026-09-02 18:00:04,1a062742a04ec272,Daily Report,supriyav.edujam@gmail.com,Supriya,2026-09-02T14:09:15,SUCCESS,Sales,Supriya,02-09-2026,,0.41
+2026-09-02 18:00:05,1a06272c34467a70,Daily report of 02-09-2026,ahleem.edujam@gmail.com,Ahleem,2026-09-02T14:07:50,SUCCESS,Sales,Ahleem,02-09-2026,,0.45
+2026-09-02 18:00:05,1a0626a31c4f3710,2ndSEPTEMBER 2026,farhatnaaz.edujam@gmail.com,Farhatnaaz,2026-09-02T13:58:23,SUCCESS,Sales,Farhatnaaz,02-09-2026,,0.37
+2026-09-02 18:00:05,1a062684a493f0a4,REPORT,ishas.edujam@gmail.com,Isha,2026-09-02T13:56:21,SUCCESS,Sales,Isha,02-09-2026,,0.38
+2026-09-02 18:00:06,1a06267fb6aee896,2nd September kra report,akshata.edujam@gmail.com,Akshata,2026-09-02T13:56:03,SUCCESS,Sales,Akshata,02-09-2026,,0.42
+2026-09-02 18:00:07,1a06267619e5fbe9,Report - 02-09-2026,jayesha.edujam@gmail.com,Jayesh,2026-09-02T13:55:22,SUCCESS,Sales,Jayesh,02-09-2026,,0.72
