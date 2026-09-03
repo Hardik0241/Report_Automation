@@ -2,6 +2,7 @@
 validator.py — Data validation layer.
 Handles: employee name (exact + fuzzy), date format, required fields,
          and email-vs-screenshot data comparison with configurable tolerance.
+UPDATED: Added "Selected" field handling for HR department validation
 """
 
 import logging
@@ -167,10 +168,10 @@ class DataValidator:
         return True, "Sales report data verified successfully"
 
     def _validate_hr_data_match(self, email_data: Dict, screenshot_data: Dict) -> Tuple[bool, str]:
-        """HR validation using existing logic"""
+        """HR validation - includes Selected field"""
         rules = VALIDATION_RULES.get("HR", {})
         tolerance = rules.get("tolerance_pct", 5)
-        compare_fields = ["Total Calls", "Connected Calls", "Duration"]
+        compare_fields = ["Total Calls", "Connected Calls", "Duration", "Selected"]  # ✅ Added "Selected"
         mismatches = []
 
         for field in compare_fields:
