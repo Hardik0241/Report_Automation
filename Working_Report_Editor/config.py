@@ -32,11 +32,11 @@ SALES_EMPLOYEES = [
     "Apoorva", "Abhijit", "Sakib", "Jayesh",
     "Saif", "Rajesh", "Manasvi", "Praful", "Sachin", "Aishwary",
     "Supriya", "Sayli", "Muskan", "Ellias", "Faisal",
-    "Akshata", "Ahleem", "Farhatnaaz", "Isha", "Simran",
+    "Akshata", "Ahleem", "Farhatnaaz", "Isha",
 ]
 
 HR_EMPLOYEES = [
-    "Ruwaida", "Mehvish", "Sakshi",
+    "Mehvish", "Sakshi",
 ]
 
 # ============================================================
