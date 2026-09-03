@@ -84,7 +84,7 @@ GMAIL_QUERY = f"({FROM_QUERY}) is:unread"
 # ============================================================
 # MAX EMAILS PER RUN - Process ALL emails
 # ============================================================
-MAX_EMAILS_PER_RUN = 30
+MAX_EMAILS_PER_RUN = 35
 
 # ============================================================
 # SALES DEADLINE RULE - 09:00 PM IST
@@ -127,6 +127,7 @@ HR_COLUMN_MAPPING = {
     "Duration": 5,
     "Tomorrow Interview Lineups": 6,
     "Interview Held": 7,
+    "Selected": 8,  # ✅ NEW: Added Selected column
 }
 
 SALES_HEADERS = list(SALES_COLUMN_MAPPING.keys())
