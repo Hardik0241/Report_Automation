@@ -26,6 +26,7 @@ UPDATED: REORDERED patterns in grab_duration() - FULL duration patterns checked 
 UPDATED: Added support for no-space formats (e.g., 1h1m18s)
 UPDATED: Added support for minutes+seconds patterns (e.g., 6m 14s, 11m 13s)
 UPDATED: Updated _BASE_PROMPT to include all duration formats
+UPDATED: Added "Selected" field extraction for HR reports
 """
 
 import json
@@ -64,6 +65,7 @@ For an HR report, look for:
 - "interview held", "interviews held", "held"
 - "tomorrow interview lineups", "lineups"
 - "today held", "line ups for tomorrow", "lineup for tomorrow"
+- "selected" (NEW: number of candidates selected)
 
 For SALES report:
 {
@@ -83,7 +85,8 @@ For HR report:
   "Connected Calls": integer,
   "Duration": "HH:MM:SS",
   "Tomorrow Interview Lineups": integer,
-  "Interview Held": integer
+  "Interview Held": integer,
+  "Selected": integer
 }
 
 Rules:
@@ -153,11 +156,11 @@ class GeminiParser:
             for field in ["Total Dialed", "Total Connected", "Prospect"]:
                 data[field] = coerce_int(data.get(field, 0))
             data["Duration"] = parse_duration(data.get("Duration", ""))
-            for k in ["Total Calls", "Connected Calls", "Tomorrow Interview Lineups", "Interview Held"]:
+            for k in ["Total Calls", "Connected Calls", "Tomorrow Interview Lineups", "Interview Held", "Selected"]:
                 data.pop(k, None)
 
         elif dept == "HR":
-            for field in ["Total Calls", "Connected Calls", "Tomorrow Interview Lineups", "Interview Held"]:
+            for field in ["Total Calls", "Connected Calls", "Tomorrow Interview Lineups", "Interview Held", "Selected"]:
                 data[field] = coerce_int(data.get(field, 0))
             data["Duration"] = parse_duration(data.get("Duration", ""))
             for k in ["Total Dialed", "Total Connected", "Prospect"]:
@@ -189,7 +192,8 @@ class GeminiParser:
             "candidate", "screening", "interview held", "tomorrow interview",
             "today held", "line ups for tomorrow", "total line ups", 
             "interview lineups", "held interviews", "held-",
-            "today held", "today interview held", "lineup for tomorrow"
+            "today held", "today interview held", "lineup for tomorrow",
+            "selected"  # ✅ NEW: Added "selected" to HR keywords
         ]
         for kw in hr_keywords:
             if kw in t:
@@ -485,6 +489,22 @@ class GeminiParser:
                     logger.info(f"HR Held extracted: {held} using pattern: {pattern}")
                     break
             
+            # ✅ NEW: Extract "Selected" value
+            selected = 0
+            selected_patterns = [
+                r"(?i)selected[\s]*[:=-][\s]*(\d+)",
+                r"(?i)selected[\s]+(\d+)",
+                r"(?i)selected-[\s]*(\d+)",
+                r"(?i)selected[\s]*:[\s]*(\d+)",
+                r"(?i)selected[\s]*-\s*(\d+)",
+            ]
+            for pattern in selected_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    selected = int(match.group(1))
+                    logger.info(f"HR Selected extracted: {selected} using pattern: {pattern}")
+                    break
+            
             return {
                 "employee_name": name,
                 "department": "HR",
@@ -493,6 +513,7 @@ class GeminiParser:
                 "Duration": duration,
                 "Tomorrow Interview Lineups": lineups,
                 "Interview Held": held,
+                "Selected": selected,  # ✅ NEW: Added Selected field
             }
 
         return None
