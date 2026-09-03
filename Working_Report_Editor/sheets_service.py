@@ -6,6 +6,7 @@ UPDATED: Fixed write_batch() to properly clear "Not Sent" status when data is wr
 UPDATED: Supports writing "Not Sent" status for late Sales submissions
 UPDATED: Added retry logic with exponential backoff for connection failures (503 errors)
 UPDATED: Added timeout to prevent hanging
+UPDATED: Added "Selected" column to HR mapping
 """
 
 import logging
