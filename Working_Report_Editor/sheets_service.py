@@ -7,6 +7,7 @@ UPDATED: Supports writing "Not Sent" status for late Sales submissions
 UPDATED: Added retry logic with exponential backoff for connection failures (503 errors)
 UPDATED: Added timeout to prevent hanging
 UPDATED: Added "Selected" column to HR mapping
+UPDATED: Auto-creates "Selected" column in HR sheets if missing
 """
 
 import logging
@@ -279,6 +280,53 @@ class SheetsService:
         except Exception as e:
             logger.warning(f"Could not ensure status column: {e}")
 
+    def ensure_selected_column(self, department: str, date_str: str) -> None:
+        """
+        Ensure the "Selected" column exists in HR sheets.
+        If missing, add it after the last existing column.
+        """
+        if department != "HR":
+            return
+        
+        try:
+            ws = self._get_worksheet(department, date_str)
+            headers = ws.row_values(1)
+            
+            if "Selected" not in headers:
+                # Find the position to insert (after Interview Held or at the end)
+                # Check if Interview Held exists
+                interview_held_col = None
+                for i, header in enumerate(headers, start=1):
+                    if header == "Interview Held":
+                        interview_held_col = i
+                        break
+                
+                if interview_held_col:
+                    # Insert after Interview Held
+                    insert_col = interview_held_col + 1
+                else:
+                    # Insert at the end
+                    insert_col = len(headers) + 1
+                
+                ws.update_cell(1, insert_col, "Selected")
+                logger.info(f"✅ Added 'Selected' column at position {insert_col} in {ws.title}")
+                
+                # Update the column mapping dynamically
+                # Refresh cached data
+                self._invalidate_cache(department, date_str)
+                
+                # Apply formatting to the new column
+                col_letter = gspread.utils.rowcol_to_a1(1, insert_col).rstrip("0123456789")
+                range_str = f"{col_letter}1:{col_letter}100"
+                self._apply_formatting(ws, range_str)
+                
+                logger.info(f"✅ Applied formatting to 'Selected' column in {ws.title}")
+            else:
+                logger.info(f"✅ 'Selected' column already exists in {ws.title}")
+                
+        except Exception as e:
+            logger.warning(f"Could not ensure 'Selected' column: {e}")
+
     def _get_worksheet(self, department: str, date_str: str) -> gspread.Worksheet:
         key = (department, date_str)
         if key in self._ws_cache:
@@ -297,13 +345,18 @@ class SheetsService:
     def _create_worksheet(self, ss: gspread.Spreadsheet, name: str, department: str) -> gspread.Worksheet:
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
         headers = SALES_HEADERS if department == "Sales" else HR_HEADERS
+        
+        # Add "Selected" to HR headers if not already present
+        if department == "HR" and "Selected" not in headers:
+            headers = headers + ["Selected"]
+        
         ws = ss.add_worksheet(title=name, rows=str(len(employees) * 35 + 10), cols="20")
         
         ws.update("A1", [headers])
         ws.update(f"B2:B{len(employees) + 1}", [[emp] for emp in employees])
         self._apply_formatting(ws)
         
-        logger.info(f"Created sheet '{name}' for {department}")
+        logger.info(f"Created sheet '{name}' for {department} with headers: {headers}")
         return ws
 
     def mark_all_as_not_sent(self, department: str, date_str: str) -> None:
@@ -365,6 +418,10 @@ class SheetsService:
         employees = SALES_EMPLOYEES if department == "Sales" else HR_EMPLOYEES
         ws = self._get_worksheet(department, date_str)
         
+        # ✅ Ensure "Selected" column exists for HR sheets
+        if department == "HR":
+            self.ensure_selected_column(department, date_str)
+        
         all_values = self._get_cached_worksheet_data(department, date_str)
         
         has_date = set()
@@ -402,6 +459,11 @@ class SheetsService:
     def write_batch(self, department: str, date_str: str, updates: List[Tuple[int, Dict]]) -> None:
         if not updates:
             return
+        
+        # ✅ Ensure "Selected" column exists for HR sheets before writing
+        if department == "HR":
+            self.ensure_selected_column(department, date_str)
+        
         ws = self._get_worksheet(department, date_str)
         mapping = SALES_COLUMN_MAPPING if department == "Sales" else HR_COLUMN_MAPPING
         
