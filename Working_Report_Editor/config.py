@@ -62,11 +62,11 @@ SALES_EMAIL_MAP = {
     "ahleem.edujam@gmail.com": "Ahleem",
     "farhatnaaz.edujam@gmail.com": "Farhatnaaz",
     "ishas.edujam@gmail.com": "Isha",
-    "simrand.edujam@gmail.com": "Simran",
+    
 }
 
 HR_EMAIL_MAP = {
-    "ruwaida.hredujam@gmail.com": "Ruwaida",
+    
     "mehvish.hredujam@gmail.com": "Mehvish",
     "sakshi.hredujam@gmail.com": "Sakshi",
 }
