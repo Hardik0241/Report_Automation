@@ -7,6 +7,7 @@ UPDATED: Removed ALL status messages from Report Status column (always blank exc
 UPDATED: Added logic to mark Sales employees as "Not Sent" if they submit after 09:00 PM IST
 UPDATED: HR employees are NOT subject to the 09:00 PM deadline rule
 UPDATED: Added graceful error handling for Sheets connection failures
+UPDATED: Moved _mark_all_as_not_sent_for_date() AFTER parse and validation to prevent marking "Not Sent" for failed or skipped emails
 """
 
 import logging
@@ -184,32 +185,51 @@ class ReportProcessor:
                 return _fail(f"Sender '{sender_email}' not in department maps")
 
             date_str = received_timestamp_to_date(received_ms) if received_ms else received_at.strftime("%d-%m-%Y")
+            logger.info(f"📅 Email date: {date_str}, Today: {datetime.now().strftime('%d-%m-%Y')}")
 
-            self._mark_all_as_not_sent_for_date(dept, date_str)
-
+            # ============================================================
+            # ✅ STEP 1: Check if email is from today FIRST
+            # ============================================================
             if not self._is_today_date(date_str):
                 logger.info(f"⏭️ Skipping email from {date_str} (not today's date) - will remain unread")
                 self.tracker.mark_processed(email_hash)
                 return {"status": "SKIPPED_OLD_DATE", "reason": f"Email date {date_str} is not today"}
 
+            # ============================================================
+            # ✅ STEP 2: Check if employee already has data in sheet
+            # ============================================================
             if self._check_already_in_sheet(dept, canonical_name, date_str):
                 logger.info(f"✅ Employee {canonical_name} already has data in sheet for {date_str} → skipping")
                 self.tracker.mark_processed(email_hash)
                 return {"status": "SKIPPED_SHEET"}
 
+            # ============================================================
+            # ✅ STEP 3: Parse email data
+            # ============================================================
             email_data = self.parser.parse_email(body, sender_email)
             if not email_data:
                 return _fail("Email body parsing failed", dept=dept, emp=canonical_name, date=date_str)
+
+            logger.info(f"📊 Parsed data: {email_data}")
 
             email_data["department"] = dept
             email_data["employee_name"] = canonical_name
             email_data["date"] = date_str
 
+            # ============================================================
+            # ✅ STEP 4: Validate required fields
+            # ============================================================
             ok, field_err = self.validator.validate_required_fields(email_data, dept)
             if not ok:
                 return _fail(field_err, dept=dept, emp=canonical_name, date=date_str)
 
-            # UPDATED: Set status based on department and submission time
+            # ============================================================
+            # ✅ STEP 5: NOW mark all employees as "Not Sent" for this date
+            # (Only after confirming the email is valid and can be processed)
+            # ============================================================
+            self._mark_all_as_not_sent_for_date(dept, date_str)
+
+            # Set status based on Sales deadline rule
             report_status = ""
             
             # Only apply deadline rule to Sales department
@@ -225,6 +245,9 @@ class ReportProcessor:
 
             email_data["report_status"] = report_status
 
+            # ============================================================
+            # ✅ STEP 6: Ensure sheet and write data
+            # ============================================================
             self.sheets.ensure_date_for_all_employees(dept, date_str)
             self.sheets.ensure_status_column(dept, date_str)
             row_num = self.sheets.find_employee_row(dept, date_str, canonical_name)
