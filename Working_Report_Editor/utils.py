@@ -25,6 +25,8 @@ UPDATED: Added support for "00h" format (e.g., 00h 52m 3s)
 UPDATED: Added support for "sec" without spaces (e.g., 2h 11m 31sec)
 UPDATED: Added support for addition with "from other phone" pattern (e.g., 1 H + 10 minutes from other phone)
 UPDATED: REORDERED patterns - minutes+seconds (6m 14s) checked BEFORE just-seconds (14s)
+UPDATED: FIXED pattern order - single-digit dot format checked BEFORE two-digit dot format
+UPDATED: FIXED pattern order - single-digit hour colon format checked BEFORE two-digit hour colon format
 """
 
 import re
@@ -143,13 +145,12 @@ def parse_duration(raw: str) -> str:
         s = int(match.group(3))
         return f"{h:02d}:{m:02d}:{s:02d}"
     
-    # Handle HH.MM.SS format with dots (two-digit hour)
-    match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', clean_raw)
-    if match:
-        h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        return f"{h:02d}:{m:02d}:{s:02d}"
+    # ============================================================
+    # FIXED: Single-digit dot format checked BEFORE two-digit dot format
+    # ============================================================
     
     # Handle H.MM.SS format with single digit hour and dots (e.g., 2.08.32)
+    # Check this FIRST to avoid matching "2.08.32" as "02.08.32"
     match = re.search(r'(\d{1})\.(\d{2})\.(\d{2})', clean_raw)
     if match:
         h = int(match.group(1))
@@ -157,8 +158,26 @@ def parse_duration(raw: str) -> str:
         s = int(match.group(3))
         return f"{h:02d}:{m:02d}:{s:02d}"
     
-    # Handle HH:MM:SS format with single digit hour/minute (e.g., 1:28:30)
-    match = re.search(r'(\d{1,2}):(\d{1,2}):(\d{1,2})', clean_raw)
+    # Handle HH.MM.SS format with dots (two-digit hour)
+    match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', clean_raw)
+    if match:
+        h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        return f"{h:02d}:{m:02d}:{s:02d}"
+    
+    # ============================================================
+    # FIXED: Single-digit hour colon format checked BEFORE two-digit hour colon format
+    # ============================================================
+    
+    # Handle HH:MM:SS format with single digit hour (e.g., 1:28:30)
+    match = re.search(r'(\d{1}):(\d{2}):(\d{2})', clean_raw)
+    if match:
+        h = int(match.group(1))
+        m = int(match.group(2))
+        s = int(match.group(3))
+        return f"{h:02d}:{m:02d}:{s:02d}"
+    
+    # Handle HH:MM:SS format with two digit hour (e.g., 01:28:30)
+    match = re.search(r'(\d{2}):(\d{2}):(\d{2})', clean_raw)
     if match:
         h = int(match.group(1))
         m = int(match.group(2))
@@ -527,7 +546,31 @@ def _duration_to_seconds(duration_str: str) -> int:
         return total_seconds
     
     # ============================================================
-    # PRIORITY 7: ADDITION PATTERNS (+ symbol)
+    # PRIORITY 7: DOT FORMATS (HH.MM.SS, H.MM.SS)
+    # ============================================================
+    
+    # ============================================================
+    # FIXED: Single-digit dot format checked BEFORE two-digit dot format
+    # ============================================================
+    
+    # Handle H.MM.SS format with single digit hour and dots (e.g., 2.08.32)
+    match = re.search(r'(\d{1})\.(\d{2})\.(\d{2})', duration_str)
+    if match:
+        h = int(match.group(1))
+        m = int(match.group(2))
+        s = int(match.group(3))
+        total_seconds += h * 3600 + m * 60 + s
+        return total_seconds
+    
+    # Handle HH.MM.SS format with dots (two-digit hour)
+    match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', duration_str)
+    if match:
+        h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        total_seconds += h * 3600 + m * 60 + s
+        return total_seconds
+    
+    # ============================================================
+    # PRIORITY 8: ADDITION PATTERNS (+ symbol)
     # ============================================================
     
     # Handle addition patterns with + symbol (including mins plural)
@@ -555,26 +598,6 @@ def _duration_to_seconds(duration_str: str) -> int:
         extra_minutes = int(text_addition.group(1))
         total_seconds += extra_minutes * 60
         duration_str = re.sub(r'(?:also add|add|plus|additional)\s+\d+\s*(?:min(?:ute)?s?)', '', duration_str, flags=re.IGNORECASE)
-    
-    # ============================================================
-    # PRIORITY 8: DOT FORMATS (HH.MM.SS, H.MM.SS)
-    # ============================================================
-    
-    # Handle HH.MM.SS format with dots (two-digit hour)
-    match = re.search(r'(\d{2})\.(\d{2})\.(\d{2})', duration_str)
-    if match:
-        h, m, s = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        total_seconds += h * 3600 + m * 60 + s
-        return total_seconds
-    
-    # Handle H.MM.SS format with single digit hour and dots (e.g., 2.08.32)
-    match = re.search(r'(\d{1})\.(\d{2})\.(\d{2})', duration_str)
-    if match:
-        h = int(match.group(1))
-        m = int(match.group(2))
-        s = int(match.group(3))
-        total_seconds += h * 3600 + m * 60 + s
-        return total_seconds
     
     # Handle HH:MM:M format with single digit seconds (e.g., 01:28:0)
     match = re.search(r'(\d{1,2}):(\d{1,2}):(\d{1})', duration_str)
