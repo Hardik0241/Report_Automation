@@ -241,3 +241,4 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-09-07 15:10:20,1a07c14daea53bdf,KRA Report,sakibs.edujam@gmail.com,Sakib,2026-09-07T13:35:24,SUCCESS,Sales,Sakib,07-09-2026,,0.43
 2026-09-07 15:10:20,1a07c13d8fc526e7,Daily report of 07-09-2026,ahleem.edujam@gmail.com,Ahleem,2026-09-07T13:34:17,SUCCESS,Sales,Ahleem,07-09-2026,,0.42
 2026-09-07 15:10:20,1a07c13ce37b9332,7/09/2026 kra report,saylip.edujam@gmail.com,Sayli,2026-09-07T13:34:14,FAILED,Sales,Sayli,07-09-2026,"Missing required fields: Total Dialed, Total Connected",0.25
+2026-09-07 19:20:58,1a07c13ce37b9332,7/09/2026 kra report,saylip.edujam@gmail.com,Sayli,2026-09-07T13:34:14,SUCCESS,Sales,Sayli,07-09-2026,,5.81
