@@ -285,3 +285,13 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-09-10 13:46:57,1a08b85be86f1bd1,Daily report of 10-09-2026,ahleem.edujam@gmail.com,Ahleem,2026-09-10T13:32:59,SUCCESS,Sales,Ahleem,10-09-2026,,6.86
 2026-09-10 13:46:57,1a08b854794d0ee1,kra,faisalk.edujam@gmail.com,Faisal,2026-09-10T13:32:17,SUCCESS,Sales,Faisal,10-09-2026,,0.42
 2026-09-10 13:46:57,1a08b840994646a5,Daily Report,sakshi.hredujam@gmail.com,Sakshi,2026-09-10T13:30:57,SUCCESS,HR,Sakshi,10-09-2026,,0.49
+2026-09-10 17:49:02,1a08bbcf99f5a8c2,report,abhijit.edujam@gmail.com,Abhijit,2026-09-10T14:33:17,SUCCESS,Sales,Abhijit,10-09-2026,,10.25
+2026-09-10 17:49:03,1a08bb75dc742bca,Daily Report of 10-09-2026,rajeshp.edujam@gmail.com,Rajesh,2026-09-10T14:27:11,SUCCESS,Sales,Rajesh,10-09-2026,,0.41
+2026-09-10 17:49:06,1a08bb633b30a4a5,Daily Report,supriyav.edujam@gmail.com,Supriya,2026-09-10T14:25:48,SUCCESS,Sales,Supriya,10-09-2026,,2.74
+2026-09-10 17:49:06,1a08ba8229946b53,Daily Report of 10-09-2026,sachingodara.edujam@gmail.com,Sachin,2026-09-10T14:10:33,SUCCESS,Sales,Sachin,10-09-2026,,0.43
+2026-09-10 17:49:06,1a08ba6778f6db39,Report,apoorva.edujam@gmail.com,Apoorva,2026-09-10T14:08:41,SUCCESS,Sales,Apoorva,10-09-2026,,0.41
+2026-09-10 17:49:07,1a08ba4ad4d3fea9,Calling Report,prafulp.edujam@gmail.com,Praful,2026-09-10T14:06:40,SUCCESS,Sales,Praful,10-09-2026,,0.42
+2026-09-10 17:49:07,1a08b9adcd52271f,Report - 10-09-2026,jayesha.edujam@gmail.com,Jayesh,2026-09-10T13:56:02,SUCCESS,Sales,Jayesh,10-09-2026,,0.40
+2026-09-10 17:49:08,1a08b9913c27a048,Daily Report of 10.09.2026,manasvi.edujam@gmail.com,Manasvi,2026-09-10T13:54:05,SUCCESS,Sales,Manasvi,10-09-2026,,0.45
+2026-09-10 17:49:08,1a08b9818111081b,REPORT,aishwary.edujam@gmail.com,Aishwary,2026-09-10T13:52:59,SUCCESS,Sales,Aishwary,10-09-2026,,0.41
+2026-09-10 17:49:08,1a08b946edf89205,10/09/2026 kra report,saylip.edujam@gmail.com,Sayli,2026-09-10T13:49:03,FAILED,Sales,Sayli,10-09-2026,"Missing required fields: Total Dialed, Total Connected",0.27
