@@ -332,3 +332,4 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-09-12 16:27:09,1a095d10529c677e,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-09-12T13:31:26,SUCCESS,HR,Mehvish,12-09-2026,,0.33
 2026-09-12 16:27:10,1a095d0ed041660b,12th September kra report,akshata.edujam@gmail.com,Akshata,2026-09-12T13:31:21,SUCCESS,Sales,Akshata,12-09-2026,,0.31
 2026-09-12 16:27:10,1a095d0b2dc59a1b,12/09/2026 kra report,saylip.edujam@gmail.com,Sayli,2026-09-12T13:31:04,FAILED,Sales,Sayli,12-09-2026,"Missing required fields: Total Dialed, Total Connected",0.17
+2026-09-12 17:47:59,1a095d1b52422ee8,12th_September_Reports,ellias.edujam@gmail.com,Ellias,2026-09-12T13:32:00,SUCCESS,Sales,Ellias,12-09-2026,,5.12
