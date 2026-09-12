@@ -27,6 +27,8 @@ UPDATED: Added support for addition with "from other phone" pattern (e.g., 1 H +
 UPDATED: REORDERED patterns - minutes+seconds (6m 14s) checked BEFORE just-seconds (14s)
 UPDATED: FIXED pattern order - single-digit dot format checked BEFORE two-digit dot format
 UPDATED: FIXED pattern order - single-digit hour colon format checked BEFORE two-digit hour colon format
+UPDATED: Added support for "1h 42 m" format (hour + minute with space before unit) in _duration_to_seconds
+UPDATED: Added cleanup for "on other phone" text in addition parts
 """
 
 import re
@@ -120,6 +122,8 @@ def parse_duration(raw: str) -> str:
     - "1 H + 10 minutes from other phone" → 01:10:00 (addition with text)
     - "6m 14s" → 00:06:14 (minutes + seconds, no hours)
     - "11m 13s" → 00:11:13 (minutes + seconds, no hours)
+    - "1h 42 m + 6 m" → 01:48:00 (hour + minute with space before unit)
+    - "02h 07m 44s + 18m on other phone" → 02:25:44 (addition with trailing text)
     """
     if not raw:
         return "00:00:00"
@@ -255,6 +259,13 @@ def parse_duration(raw: str) -> str:
     if match:
         m, s = int(match.group(1)), int(match.group(2))
         return f"00:{m:02d}:{s:02d}"
+    
+    # ✅ NEW: Handle "1h 42 m" format (hour + minute with space before unit, no seconds)
+    # Must come BEFORE addition check to allow combined durations to work
+    match = re.search(r'(\d+)\s*h(?:r)?s?\s+(\d+)\s*m(?:in)?s?(?!\d)', clean_raw, re.IGNORECASE)
+    if match:
+        h, m = int(match.group(1)), int(match.group(2))
+        return f"{h:02d}:{m:02d}:00"
     
     # Handle multiple durations with "+" and text additions (including "mins" plural)
     if '+' in clean_raw or re.search(r'(also add|add|plus|additional)', clean_raw, re.IGNORECASE):
@@ -444,6 +455,15 @@ def _duration_to_seconds(duration_str: str) -> int:
     
     # Handle "X hr Y min" format (no seconds)
     match = re.search(r'(\d+)\s*hr\s*(\d+)\s*min', duration_str, re.IGNORECASE)
+    if match:
+        h, m = int(match.group(1)), int(match.group(2))
+        total_seconds += h * 3600 + m * 60
+        return total_seconds
+    
+    # ✅ NEW: Handle "1h 42 m" format (hour + minute with space before unit, no seconds)
+    # This pattern allows space between number and 'm' (e.g., "42 m")
+    # The negative lookahead (?!\d) ensures it doesn't match when seconds follow
+    match = re.search(r'(\d+)\s*h(?:r)?s?\s+(\d+)\s*m(?:in)?s?(?!\d)', duration_str, re.IGNORECASE)
     if match:
         h, m = int(match.group(1)), int(match.group(2))
         total_seconds += h * 3600 + m * 60
