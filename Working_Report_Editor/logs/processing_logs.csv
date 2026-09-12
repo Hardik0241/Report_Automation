@@ -313,3 +313,22 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-09-11 17:50:39,1a090b748e193462,Calling Report,prafulp.edujam@gmail.com,Praful,2026-09-11T13:45:06,SUCCESS,Sales,Praful,11-09-2026,,0.43
 2026-09-11 17:50:39,1a090b6adf901de9,11TH SEPTEMBER,farhatnaaz.edujam@gmail.com,Farhatnaaz,2026-09-11T13:44:32,SUCCESS,Sales,Farhatnaaz,11-09-2026,,0.44
 2026-09-11 18:42:35,1a090ad1eefaeb2b,Re: 11th_September_Reports,ellias.edujam@gmail.com,Ellias,2026-09-11T13:30:44,SUCCESS,Sales,Ellias,11-09-2026,,4.26
+2026-09-12 16:27:04,1a095e352fd7675a,Daily Report of 12-09-2026,rajeshp.edujam@gmail.com,Rajesh,2026-09-12T13:51:23,SUCCESS,Sales,Rajesh,12-09-2026,,5.18
+2026-09-12 16:27:04,1a095e243e61aaf1,Daily Report of 12-09-2026,sachingodara.edujam@gmail.com,Sachin,2026-09-12T13:50:15,SUCCESS,Sales,Sachin,12-09-2026,,0.28
+2026-09-12 16:27:04,1a095dddc5f70e10,12th september,farhatnaaz.edujam@gmail.com,Farhatnaaz,2026-09-12T13:45:27,SUCCESS,Sales,Farhatnaaz,12-09-2026,,0.28
+2026-09-12 16:27:04,1a095dbfa168b3cd,Report,abhijit.edujam@gmail.com,Abhijit,2026-09-12T13:43:24,SUCCESS,Sales,Abhijit,12-09-2026,,0.30
+2026-09-12 16:27:05,1a095db6113620a1,Report,apoorva.edujam@gmail.com,Apoorva,2026-09-12T13:42:43,SUCCESS,Sales,Apoorva,12-09-2026,,0.29
+2026-09-12 16:27:05,1a095d68ecfe5a2c,12/09/26,muskan.edujam@gmail.com,Muskan,2026-09-12T13:37:28,SUCCESS,Sales,Muskan,12-09-2026,,0.30
+2026-09-12 16:27:05,1a095d6036d8a8b5,REPORT,aishwary.edujam@gmail.com,Aishwary,2026-09-12T13:36:49,SUCCESS,Sales,Aishwary,12-09-2026,,0.30
+2026-09-12 16:27:06,1a095d5ab5f9c315,REPORT,ishas.edujam@gmail.com,Isha,2026-09-12T13:36:29,SUCCESS,Sales,Isha,12-09-2026,,0.29
+2026-09-12 16:27:06,1a095d41679c1895,kra,faisalk.edujam@gmail.com,Faisal,2026-09-12T13:34:46,SUCCESS,Sales,Faisal,12-09-2026,,0.29
+2026-09-12 16:27:06,1a095d2a1c419297,Daily Report of 12.09.2026,manasvi.edujam@gmail.com,Manasvi,2026-09-12T13:33:12,SUCCESS,Sales,Manasvi,12-09-2026,,0.33
+2026-09-12 16:27:08,1a095d27db7ebd48,Daily Report,sakshi.hredujam@gmail.com,Sakshi,2026-09-12T13:33:00,SUCCESS,HR,Sakshi,12-09-2026,,1.24
+2026-09-12 16:27:08,1a095d2326ec9f4c,Daily report of 12-09-2026,ahleem.edujam@gmail.com,Ahleem,2026-09-12T13:32:43,SUCCESS,Sales,Ahleem,12-09-2026,,0.28
+2026-09-12 16:27:08,1a095d219a581372,Daily Report,supriyav.edujam@gmail.com,Supriya,2026-09-12T13:32:00,SUCCESS,Sales,Supriya,12-09-2026,,0.29
+2026-09-12 16:27:08,1a095d1b52422ee8,12th_September_Reports,ellias.edujam@gmail.com,Ellias,2026-09-12T13:32:00,FAILED,Sales,Ellias,12-09-2026,"Missing required fields: Total Dialed, Total Connected",0.18
+2026-09-12 16:27:09,1a095d14f1c72341,REPORT,saifd.edujam@gmail.com,Saif,2026-09-12T13:31:43,SUCCESS,Sales,Saif,12-09-2026,,0.36
+2026-09-12 16:27:09,1a095d143af717ac,Report - 12-09-2026,jayesha.edujam@gmail.com,Jayesh,2026-09-12T13:31:38,SUCCESS,Sales,Jayesh,12-09-2026,,0.31
+2026-09-12 16:27:09,1a095d10529c677e,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-09-12T13:31:26,SUCCESS,HR,Mehvish,12-09-2026,,0.33
+2026-09-12 16:27:10,1a095d0ed041660b,12th September kra report,akshata.edujam@gmail.com,Akshata,2026-09-12T13:31:21,SUCCESS,Sales,Akshata,12-09-2026,,0.31
+2026-09-12 16:27:10,1a095d0b2dc59a1b,12/09/2026 kra report,saylip.edujam@gmail.com,Sayli,2026-09-12T13:31:04,FAILED,Sales,Sayli,12-09-2026,"Missing required fields: Total Dialed, Total Connected",0.17
