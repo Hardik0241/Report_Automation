@@ -27,6 +27,8 @@ UPDATED: Added support for no-space formats (e.g., 1h1m18s)
 UPDATED: Added support for minutes+seconds patterns (e.g., 6m 14s, 11m 13s)
 UPDATED: Updated _BASE_PROMPT to include all duration formats
 UPDATED: Added "Selected" field extraction for HR reports
+UPDATED: Added support for "1h 42 m" format (hour + minute with space before unit)
+UPDATED: Added support for "02h 07m 44s + 18m on other phone" (addition with trailing text)
 """
 
 import json
@@ -93,7 +95,8 @@ Rules:
 - Use 0 for missing integer fields.
 - Use "00:00:00" for missing duration.
 - If the email contains "Leave" or "leave" anywhere, mark as "Leave" and skip.
-- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "2.08.32", "1h 42m 8sec", "1hr 14m 21s", "1hr 25min 46s", "49 MINS 9 SEC", "1hr 9min 47sec", "58:14", "1 hr 14m 18 secs + 13 mins + 6 mins", "1hr 38 min 39s", "39min 51s", "1h1m18s", "6m 14s", "11m 13s", "00h 52m 3s", "2h 11m 31sec"
+- Duration can be in formats: "1h 0m 35s", "1H 15M + 14M", "1 H 31 M", "1hr 25m 21s", "01:28:52", "02.07.36", "2.08.32", "1h 42m 8sec", "1hr 14m 21s", "1hr 25min 46s", "49 MINS 9 SEC", "1hr 9min 47sec", "58:14", "1 hr 14m 18 secs + 13 mins + 6 mins", "1hr 38 min 39s", "39min 51s", "1h1m18s", "6m 14s", "11m 13s", "00h 52m 3s", "2h 11m 31sec", "1h 42 m + 6 m", "02h 07m 44s + 18m on other phone"
+- IMPORTANT: When a duration contains a "+" sign, INCLUDE the full expression with the addition in the "Duration" field. For example, "1h 42 m + 6 m" should be extracted as-is, NOT simplified. The downstream code will calculate the total.
 
 Email content:
 """
@@ -359,6 +362,30 @@ class GeminiParser:
                     return match.group(1).strip()
                 
                 # ============================================================
+                # ✅ NEW PRIORITY 1B: HOURS + MINUTES (NO SECONDS) WITH ADDITION
+                # Handles "1h 42 m + 6 m" and "02h 07m 44s + 18m on other phone"
+                # ============================================================
+                
+                # Handle "1h 42 m + 6 m" format (hour + minute with space before unit, plus addition)
+                pattern_hr_min_plus = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*h(?:r)?\s*\d+\s*m(?:in)?s?\s*\+\s*\d+\s*m(?:in)?s?)"
+                match = re.search(pattern_hr_min_plus, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # Handle "02h 07m 44s + 18m on other phone" format (full + addition + trailing text)
+                # This pattern captures up to the "on other phone" text and stops
+                pattern_hr_min_sec_plus = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*h(?:r)?\s*\d+\s*m(?:in)?\s*\d+\s*s(?:ec)?\s*\+\s*\d+\s*m(?:in)?s?)(?:\s+on\s+other\s+phone)?"
+                match = re.search(pattern_hr_min_sec_plus, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # Handle "1h 42 m" format (hour + minute with space before unit, NO addition)
+                pattern_hr_min = rf"(?i){kw_esc}[\s]*[:=-][\s]*(\d+\s*h(?:r)?\s*\d+\s*m(?:in)?s?)(?!\d)"
+                match = re.search(pattern_hr_min, text)
+                if match:
+                    return match.group(1).strip()
+                
+                # ============================================================
                 # PRIORITY 2: MINUTES + SECONDS (NO HOURS) - FALLBACK
                 # ============================================================
                 
@@ -604,6 +631,30 @@ class GeminiParser:
             m, s = int(match.group(1)), int(match.group(2))
             return f"00:{m:02d}:{s:02d}"
         
+        # ✅ NEW: Handle "1h 42 m + 6 m" format (hour + minute with space before unit, plus addition)
+        match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m(?:in)?s?\s*\+\s*(\d+)\s*m(?:in)?s?', text, re.IGNORECASE)
+        if match:
+            h = int(match.group(1))
+            m1 = int(match.group(2))
+            m2 = int(match.group(3))
+            total_minutes = m1 + m2
+            total_hours = h + (total_minutes // 60)
+            remaining_minutes = total_minutes % 60
+            return f"{total_hours:02d}:{remaining_minutes:02d}:00"
+        
+        # ✅ NEW: Handle "02h 07m 44s + 18m on other phone" format
+        match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m(?:in)?\s*(\d+)\s*s(?:ec)?\s*\+\s*(\d+)\s*m(?:in)?s?', text, re.IGNORECASE)
+        if match:
+            h = int(match.group(1))
+            m = int(match.group(2))
+            s = int(match.group(3))
+            extra_m = int(match.group(4))
+            total_seconds = h * 3600 + m * 60 + s + extra_m * 60
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            secs = total_seconds % 60
+            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+        
         # Handle "1hr 9min 47sec" format (full words with spaces)
         match = re.search(r'(\d+)\s*hr\s*(\d+)\s*min\s*(\d+)\s*sec', text, re.IGNORECASE)
         if match:
@@ -657,6 +708,12 @@ class GeminiParser:
         if match:
             m, s = int(match.group(1)), int(match.group(2))
             return f"00:{m:02d}:{s:02d}"
+        
+        # ✅ NEW: Handle "1h 42 m" format (hour + minute with space before unit, no seconds, no addition)
+        match = re.search(r'(\d+)\s*h(?:r)?s?\s+(\d+)\s*m(?:in)?s?(?!\d)', text, re.IGNORECASE)
+        if match:
+            h, m = int(match.group(1)), int(match.group(2))
+            return f"{h:02d}:{m:02d}:00"
         
         match = re.search(r'(\d+)\s*h(?:r)?\s*(\d+)\s*m\s*(\d+)\s*s', text, re.IGNORECASE)
         if match:
