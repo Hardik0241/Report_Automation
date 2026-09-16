@@ -346,3 +346,16 @@ Timestamp,Email_ID,Email_Subject,Sender_Email,Sender_Name,Received_Time,Status,D
 2026-09-15 14:26:04,1a0a5461731320f1,Daily Report,sakshi.hredujam@gmail.com,Sakshi,2026-09-15T13:33:33,SUCCESS,HR,Sakshi,15-09-2026,,1.33
 2026-09-15 14:26:08,1a0a5453e98b057f,KRA,faisalk.edujam@gmail.com,Faisal,2026-09-15T13:32:41,SUCCESS,Sales,Faisal,15-09-2026,,4.07
 2026-09-15 14:26:09,1a0a5441844f0c75,Daily report,mehvish.hredujam@gmail.com,Mehvish,2026-09-15T13:31:24,SUCCESS,HR,Mehvish,15-09-2026,,0.37
+2026-09-16 14:18:37,1a0aa8a0aa2df23b,Re: REPORT,aishwary.edujam@gmail.com,Aishwary,2026-09-16T14:05:51,SUCCESS,Sales,Aishwary,16-09-2026,,12.39
+2026-09-16 14:18:46,1a0aa8602e16872e,Daily Report of 16-09-2026,rajeshp.edujam@gmail.com,Rajesh,2026-09-16T14:01:28,SUCCESS,Sales,Rajesh,16-09-2026,,5.45
+2026-09-16 14:18:49,1a0aa851d8157bdf,16th september,farhatnaaz.edujam@gmail.com,Farhatnaaz,2026-09-16T14:00:31,SUCCESS,Sales,Farhatnaaz,16-09-2026,,2.98
+2026-09-16 14:18:54,1a0aa804749c824c,KRA report 16.09.2026,manasvi.edujam@gmail.com,Manasvi,2026-09-16T13:55:15,SUCCESS,Sales,Manasvi,16-09-2026,,5.08
+2026-09-16 14:18:56,1a0aa7e26a47cb12,16/09/2026 kra report,saylip.edujam@gmail.com,Sayli,2026-09-16T13:52:55,SUCCESS,Sales,Sayli,16-09-2026,,2.48
+2026-09-16 14:18:56,1a0aa7de804abfe3,REPORT,ishas.edujam@gmail.com,Isha,2026-09-16T13:52:40,SUCCESS,Sales,Isha,16-09-2026,,0.37
+2026-09-16 14:18:57,1a0aa7d02f77af47,Daily Report of 16-09-2026,sachingodara.edujam@gmail.com,Sachin,2026-09-16T13:51:40,SUCCESS,Sales,Sachin,16-09-2026,,0.38
+2026-09-16 14:18:57,1a0aa7ce7010a995,Daily Report,supriyav.edujam@gmail.com,Supriya,2026-09-16T13:51:28,SUCCESS,Sales,Supriya,16-09-2026,,0.38
+2026-09-16 14:18:58,1a0aa79a8902c446,Report,apoorva.edujam@gmail.com,Apoorva,2026-09-16T13:48:01,SUCCESS,Sales,Apoorva,16-09-2026,,0.40
+2026-09-16 14:18:58,1a0aa746ed78b8a8,kra,faisalk.edujam@gmail.com,Faisal,2026-09-16T13:42:14,SUCCESS,Sales,Faisal,16-09-2026,,0.40
+2026-09-16 14:18:58,1a0aa741d9427883,16th_September_Reports,ellias.edujam@gmail.com,Ellias,2026-09-16T13:41:59,FAILED,Sales,Ellias,16-09-2026,"Missing required fields: Total Dialed, Total Connected",0.22
+2026-09-16 14:18:59,1a0aa731a322fc92,Daily report of 16-09-2026,ahleem.edujam@gmail.com,Ahleem,2026-09-16T13:40:52,SUCCESS,Sales,Ahleem,16-09-2026,,0.41
+2026-09-16 14:19:00,1a0aa6cc7755da9a,Daily Report,sakshi.hredujam@gmail.com,Sakshi,2026-09-16T13:34:00,SUCCESS,HR,Sakshi,16-09-2026,,1.82
