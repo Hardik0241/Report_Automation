@@ -32,7 +32,7 @@ SALES_EMPLOYEES = [
     "Apoorva", "Abhijit","Saif", "Rajesh", "Manasvi", 
     "Praful", "Sachin", "Aishwary", "Supriya", 
     "Sayli", "Muskan", "Ellias", "Faisal",
-    "Akshata", "Ahleem", "Farhatnaaz", "Isha",
+    "Ahleem", "Farhatnaaz", "Isha",
     "Shruti", "Rameez",
 ]
 
@@ -57,7 +57,6 @@ SALES_EMAIL_MAP = {
     "muskan.edujam@gmail.com": "Muskan",
     "ellias.edujam@gmail.com": "Ellias", 
     "faisalk.edujam@gmail.com": "Faisal",
-    "akshata.edujam@gmail.com": "Akshata",
     "ahleem.edujam@gmail.com": "Ahleem",
     "farhatnaaz.edujam@gmail.com": "Farhatnaaz",
     "ishas.edujam@gmail.com": "Isha",
