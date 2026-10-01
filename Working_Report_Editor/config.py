@@ -29,7 +29,7 @@ except Exception:
 # EMPLOYEE LISTS (Fixed order - DO NOT CHANGE)
 # ============================================================
 SALES_EMPLOYEES = [
-    "Apoorva", "Abhijit","Saif", "Rajesh", "Manasvi", 
+    "Apoorva", "Abhijit","Saif", "Rajesh", 
     "Praful", "Sachin", "Aishwary", "Supriya", 
     "Sayli", "Muskan", "Ellias", "Faisal",
     "Ahleem", "Farhatnaaz", "Isha",
@@ -48,7 +48,6 @@ SALES_EMAIL_MAP = {
     "abhijit.edujam@gmail.com": "Abhijit",
     "saifd.edujam@gmail.com": "Saif",
     "rajeshp.edujam@gmail.com": "Rajesh",
-    "manasvi.edujam@gmail.com": "Manasvi",
     "prafulp.edujam@gmail.com": "Praful",
     "sachingodara.edujam@gmail.com": "Sachin",
     "aishwary.edujam@gmail.com": "Aishwary",
